@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>the101game</title>
+  <style>
+    :root {
+      --bg: #0c0c0c;
+      --fg: #eaeaea;
+      --mut: #9aa0a6;
+      --card: #151515;
+      --accent: #8ab4f8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: sans-serif;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      padding: 10px;
+      border: 1px solid #333;
+      background: #101010;
+      color: var(--fg);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h1>the101game</h1>
+    <button class="btn" onclick="toggleLanguage()">Switch Language</button>
+  </div>
+
+  <div id="content">
+    <p id="story">Welkom bij de game. Kies je taal!</p>
+    <p>English version: <a href="#" onclick="setLanguage('en')">Go to English</a></p>
+    <p>Dutch version: <a href="#" onclick="setLanguage('nl')">Ga naar Nederlands</a></p>
+  </div>
+
+  <script>
+    // Functie om taal te wisselen en te onthouden
+    function toggleLanguage() {
+      const currentLang = localStorage.getItem('language') || 'nl';
+      const newLang = currentLang === 'nl' ? 'en' : 'nl';
+      setLanguage(newLang);
+    }
+
+    // Sla de taalkeuze op in localStorage en verwerk de taal
+    function setLanguage(language) {
+      localStorage.setItem('language', language);
+      window.location.href = language === 'en' ? '/en/start' : '/nl/start';
+    }
+
+    // Kijkt naar de opgeslagen taalkeuze
+    window.onload = function() {
+      const language = localStorage.getItem('language') || 'nl';
+      if (language === 'en') {
+        document.getElementById('story').textContent = 'Welcome to the game. Choose your language!';
+      } else {
+        document.getElementById('story').textContent = 'Welkom bij de game. Kies je taal!';
+      }
+    }
+  </script>
+</body>
+</html>
