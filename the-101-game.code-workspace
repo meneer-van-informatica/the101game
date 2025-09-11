@@ -1,0 +1,17 @@
+{
+    "folders": [
+        {
+            "path": "../the101game"
+        },
+        {
+            "name": "the101game",
+            "path": "C:/Users/Meneer/the101game"
+        }
+    ],
+    "settings": {
+        "files.autoSave": "afterDelay",
+        "files.autoSaveDelay": 1000,
+        "editor.formatOnSave": true,
+        "workbench.colorTheme": "Dark+ (default dark)"
+    }
+}
