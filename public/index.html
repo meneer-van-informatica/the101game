@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE101GAME</title>
+    <title>THE101GAME - Prototype</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,30 +21,62 @@
         button:hover {
             background-color: #666;
         }
+        .impact-meter {
+            margin-top: 20px;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
 
-<h1>Welkom bij THE101GAME</h1>
+<h1>Welkom bij THE101GAME - Prototype</h1>
 <p>Maak een keuze om verder te gaan:</p>
 
 <button id="optionA">Optie A</button>
 <button id="optionB">Optie B</button>
 <button id="optionC">Optie C</button>
 
+<div class="impact-meter" id="impactMeter">
+    Impact: 0
+</div>
+
 <script>
+    let impact = 0;
+
+    function updateImpact(choice) {
+        // Update impact op basis van de keuze
+        if (choice === "A") {
+            impact += 1;
+        } else if (choice === "B") {
+            impact -= 1;
+        } else if (choice === "C") {
+            impact += 2;
+        }
+
+        // Update de impactmeter
+        document.getElementById('impactMeter').textContent = "Impact: " + impact;
+    }
+
     document.getElementById('optionA').onclick = function() {
         alert('Keuze A geregistreerd!');
+        updateImpact("A");
         // Hier kun je API-aanroep doen naar backend om keuze op blockchain te registreren
     };
     document.getElementById('optionB').onclick = function() {
         alert('Keuze B geregistreerd!');
+        updateImpact("B");
         // Hier kun je API-aanroep doen naar backend om keuze op blockchain te registreren
     };
     document.getElementById('optionC').onclick = function() {
         alert('Keuze C geregistreerd!');
+        updateImpact("C");
         // Hier kun je API-aanroep doen naar backend om keuze op blockchain te registreren
     };
+    // In de onclick functies van de knoppen, voeg deze toe
+    fetch(`/add_block/${choice}`)
+        .then(response => response.json())
+        .then(data => alert(data.message));
+
 </script>
 
 </body>

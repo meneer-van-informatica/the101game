@@ -1,11 +1,14 @@
+from flask import Flask, jsonify
 import hashlib
 import time
 
-# De Blockchain klasse
+app = Flask(__name__)
+
+# Blockchain klasse
 class Blockchain:
     def __init__(self):
         self.chain = []
-        self.create_genesis_block()  # Voeg de eerste blok toe
+        self.create_genesis_block()
 
     def create_genesis_block(self):
         """Maak het eerste blok, de 'genesis' blok"""
@@ -23,8 +26,7 @@ class Blockchain:
         for block in self.chain:
             print(f"Block {block.index}: {block.data} | Hash: {block.hash}")
 
-
-# De Block klasse
+# Block klasse
 class Block:
     def __init__(self, index, timestamp, data, previous_hash):
         self.index = index
@@ -37,9 +39,6 @@ class Block:
         """Bereken de hash van het blok op basis van zijn inhoud"""
         value = f"{self.index}{self.timestamp}{self.data}{self.previous_hash}"
         return hashlib.sha256(value.encode('utf-8')).hexdigest()
-
-# Flask applicatie
-app = Flask(__name__)
 
 # Maak de blockchain aan
 game_chain = Blockchain()
