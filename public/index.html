@@ -3,86 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>W0L9 - Color Click Game</title>
+    <title>W0L1 - Simple Accordeon</title>
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: black; }
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
+            color: white;
+            flex-direction: column;
+        }
+
         .grid {
             display: grid;
-            grid-template-columns: repeat(10, 50px); /* 10 columns */
-            grid-template-rows: repeat(7, 50px);    /* 7 rows */
-            gap: 5px;
+            grid-template-columns: repeat(4, 50px);
+            grid-gap: 5px;
+            margin-top: 30px;
         }
-        .block {
+
+        .block, .piano-key {
             width: 50px;
             height: 50px;
-            background-color: #333;
             cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .block {
+            background-color: #444;
+            border: 2px solid #666;
+        }
+
+        .piano-key {
+            background-color: #222;
+            border: 2px solid #666;
+            margin: 0 2px;
+        }
+
+        .block:hover, .piano-key:hover {
+            background-color: #ff0;  /* Highlight when hovered */
+        }
+
+        .piano {
+            display: flex;
+            margin-top: 30px;
+            justify-content: center;
+        }
+
+        .bass {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
         }
     </style>
 </head>
 <body>
-    <div class="grid" id="grid"></div>
+    <h1>W0L1 - Accordeon Game</h1>
+    <p>Click the buttons to make sounds.</p>
+
+    <!-- Accordeon: Left Side (Bass) -->
+    <div class="bass grid">
+        <div class="block" onclick="playTone('low1')"></div>
+        <div class="block" onclick="playTone('low2')"></div>
+        <div class="block" onclick="playTone('low3')"></div>
+        <div class="block" onclick="playTone('low4')"></div>
+    </div>
+
+    <!-- Accordeon: Right Side (Piano) -->
+    <div class="piano">
+        <div class="piano-key" onclick="playTone('high1')"></div>
+        <div class="piano-key" onclick="playTone('high2')"></div>
+        <div class="piano-key" onclick="playTone('high3')"></div>
+        <div class="piano-key" onclick="playTone('high4')"></div>
+        <div class="piano-key" onclick="playTone('high5')"></div>
+        <div class="piano-key" onclick="playTone('high6')"></div>
+        <div class="piano-key" onclick="playTone('high7')"></div>
+    </div>
 
     <script>
-        let level = 1;
-        const totalLevels = 10;
-        let score = 0;
-
-        function createGrid() {
-            const gridContainer = document.getElementById('grid');
-            gridContainer.innerHTML = ''; // Clear the grid before adding new blocks
-
-            for (let i = 0; i < 70; i++) {  // 10 x 7 = 70 blocks
-                const block = document.createElement('div');
-                block.classList.add('block');
-                block.addEventListener('click', () => handleBlockClick(block));
-
-                gridContainer.appendChild(block);
+        // Function to play tones (Bass & Piano sounds)
+        function playTone(tone) {
+            let sound;
+            switch (tone) {
+                case 'low1':
+                    sound = new Audio('https://www.soundjay.com/button/beep-07.wav');  // Example low tone
+                    break;
+                case 'low2':
+                    sound = new Audio('https://www.soundjay.com/button/beep-08.wav');  // Example low tone
+                    break;
+                case 'low3':
+                    sound = new Audio('https://www.soundjay.com/button/beep-09.wav');  // Example low tone
+                    break;
+                case 'low4':
+                    sound = new Audio('https://www.soundjay.com/button/beep-10.wav');  // Example low tone
+                    break;
+                case 'high1':
+                    sound = new Audio('https://www.soundjay.com/button/beep-01.wav');  // Example high tone
+                    break;
+                case 'high2':
+                    sound = new Audio('https://www.soundjay.com/button/beep-02.wav');  // Example high tone
+                    break;
+                case 'high3':
+                    sound = new Audio('https://www.soundjay.com/button/beep-03.wav');  // Example high tone
+                    break;
+                case 'high4':
+                    sound = new Audio('https://www.soundjay.com/button/beep-04.wav');  // Example high tone
+                    break;
+                case 'high5':
+                    sound = new Audio('https://www.soundjay.com/button/beep-05.wav');  // Example high tone
+                    break;
+                case 'high6':
+                    sound = new Audio('https://www.soundjay.com/button/beep-06.wav');  // Example high tone
+                    break;
+                case 'high7':
+                    sound = new Audio('https://www.soundjay.com/button/beep-07.wav');  // Example high tone
+                    break;
+                default:
+                    sound = new Audio('https://www.soundjay.com/button/beep-08.wav');  // Default sound
+                    break;
             }
-
-            updateGridColors();
+            sound.play();
         }
-
-        function handleBlockClick(block) {
-            if (block.style.backgroundColor === 'green') { // Correct block color
-                score++;
-                if (score === level) {
-                    if (level < totalLevels) {
-                        level++;
-                        score = 0;
-                        setTimeout(startLevel, 500);
-                    }
-                }
-            }
-        }
-
-        function updateGridColors() {
-            const blocks = document.querySelectorAll('.block');
-            blocks.forEach(block => {
-                const randomColor = getRandomColor();
-                block.style.backgroundColor = randomColor;
-
-                // 50% chance to make the block "clickable" (green)
-                if (Math.random() < 0.5) {
-                    block.dataset.clickable = true;
-                    block.style.backgroundColor = 'green'; // Correct color
-                } else {
-                    block.dataset.clickable = false;
-                }
-            });
-        }
-
-        function getRandomColor() {
-            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff'];
-            return colors[Math.floor(Math.random() * colors.length)];
-        }
-
-        function startLevel() {
-            createGrid();
-            setInterval(updateGridColors, 1000); // Update grid colors every second
-        }
-
-        startLevel();
     </script>
 </body>
 </html>
