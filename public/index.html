@@ -3,130 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>W0L1 - Simple Accordeon</title>
+    <title>THE101GAME</title>
     <style>
         body {
-            font-family: 'Courier New', monospace;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #333;
-            color: white;
-            flex-direction: column;
+            font-family: Arial, sans-serif;
+            background-color: #111;
+            color: #fff;
+            text-align: center;
         }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(4, 50px);
-            grid-gap: 5px;
-            margin-top: 30px;
-        }
-
-        .block, .piano-key {
-            width: 50px;
-            height: 50px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .block {
+        button {
             background-color: #444;
-            border: 2px solid #666;
+            border: none;
+            padding: 15px 32px;
+            font-size: 18px;
+            cursor: pointer;
         }
-
-        .piano-key {
-            background-color: #222;
-            border: 2px solid #666;
-            margin: 0 2px;
-        }
-
-        .block:hover, .piano-key:hover {
-            background-color: #ff0;  /* Highlight when hovered */
-        }
-
-        .piano {
-            display: flex;
-            margin-top: 30px;
-            justify-content: center;
-        }
-
-        .bass {
-            margin-top: 10px;
-            display: flex;
-            justify-content: center;
+        button:hover {
+            background-color: #666;
         }
     </style>
 </head>
 <body>
-    <h1>W0L1 - Accordeon Game</h1>
-    <p>Click the buttons to make sounds.</p>
 
-    <!-- Accordeon: Left Side (Bass) -->
-    <div class="bass grid">
-        <div class="block" onclick="playTone('low1')"></div>
-        <div class="block" onclick="playTone('low2')"></div>
-        <div class="block" onclick="playTone('low3')"></div>
-        <div class="block" onclick="playTone('low4')"></div>
-    </div>
+<h1>Welkom bij THE101GAME</h1>
+<p>Maak een keuze om verder te gaan:</p>
 
-    <!-- Accordeon: Right Side (Piano) -->
-    <div class="piano">
-        <div class="piano-key" onclick="playTone('high1')"></div>
-        <div class="piano-key" onclick="playTone('high2')"></div>
-        <div class="piano-key" onclick="playTone('high3')"></div>
-        <div class="piano-key" onclick="playTone('high4')"></div>
-        <div class="piano-key" onclick="playTone('high5')"></div>
-        <div class="piano-key" onclick="playTone('high6')"></div>
-        <div class="piano-key" onclick="playTone('high7')"></div>
-    </div>
+<button id="optionA">Optie A</button>
+<button id="optionB">Optie B</button>
+<button id="optionC">Optie C</button>
 
-    <script>
-        // Function to play tones (Bass & Piano sounds)
-        function playTone(tone) {
-            let sound;
-            switch (tone) {
-                case 'low1':
-                    sound = new Audio('https://www.soundjay.com/button/beep-07.wav');  // Example low tone
-                    break;
-                case 'low2':
-                    sound = new Audio('https://www.soundjay.com/button/beep-08.wav');  // Example low tone
-                    break;
-                case 'low3':
-                    sound = new Audio('https://www.soundjay.com/button/beep-09.wav');  // Example low tone
-                    break;
-                case 'low4':
-                    sound = new Audio('https://www.soundjay.com/button/beep-10.wav');  // Example low tone
-                    break;
-                case 'high1':
-                    sound = new Audio('https://www.soundjay.com/button/beep-01.wav');  // Example high tone
-                    break;
-                case 'high2':
-                    sound = new Audio('https://www.soundjay.com/button/beep-02.wav');  // Example high tone
-                    break;
-                case 'high3':
-                    sound = new Audio('https://www.soundjay.com/button/beep-03.wav');  // Example high tone
-                    break;
-                case 'high4':
-                    sound = new Audio('https://www.soundjay.com/button/beep-04.wav');  // Example high tone
-                    break;
-                case 'high5':
-                    sound = new Audio('https://www.soundjay.com/button/beep-05.wav');  // Example high tone
-                    break;
-                case 'high6':
-                    sound = new Audio('https://www.soundjay.com/button/beep-06.wav');  // Example high tone
-                    break;
-                case 'high7':
-                    sound = new Audio('https://www.soundjay.com/button/beep-07.wav');  // Example high tone
-                    break;
-                default:
-                    sound = new Audio('https://www.soundjay.com/button/beep-08.wav');  // Default sound
-                    break;
-            }
-            sound.play();
-        }
-    </script>
+<script>
+    document.getElementById('optionA').onclick = function() {
+        alert('Keuze A geregistreerd!');
+        // Hier kun je API-aanroep doen naar backend om keuze op blockchain te registreren
+    };
+    document.getElementById('optionB').onclick = function() {
+        alert('Keuze B geregistreerd!');
+        // Hier kun je API-aanroep doen naar backend om keuze op blockchain te registreren
+    };
+    document.getElementById('optionC').onclick = function() {
+        alert('Keuze C geregistreerd!');
+        // Hier kun je API-aanroep doen naar backend om keuze op blockchain te registreren
+    };
+</script>
+
 </body>
 </html>
