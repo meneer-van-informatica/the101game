@@ -37,3 +37,25 @@ class Block:
         """Bereken de hash van het blok op basis van zijn inhoud"""
         value = f"{self.index}{self.timestamp}{self.data}{self.previous_hash}"
         return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
+# Flask applicatie
+app = Flask(__name__)
+
+# Maak de blockchain aan
+game_chain = Blockchain()
+
+@app.route('/')
+def index():
+    return "Welkom bij THE101GAME!"
+
+@app.route('/add_block/<choice>', methods=['GET'])
+def add_block(choice):
+    """Voeg een keuze toe aan de blockchain"""
+    game_chain.add_block(f"Speler kiest optie {choice}")
+    return jsonify({
+        "message": f"Keuze {choice} geregistreerd!",
+        "blockchain": [block.data for block in game_chain.chain]
+    })
+
+if __name__ == "__main__":
+    app.run(debug=True, host='0.0.0.0')
