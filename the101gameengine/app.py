@@ -59,15 +59,15 @@ MIN_HTML = """
         font-size:clamp(28px,8vw,80px); text-align:center; }
     p{ margin:0; opacity:.9; text-align:center; max-width:60ch }
     .row{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center }
-    button, a.btn{
+    a.btn, button{
       appearance:none; background:transparent; color:var(--fg);
       border:2px solid var(--accent); border-radius:8px;
       padding:.75em 1.1em; font-weight:700; letter-spacing:.3px;
       text-decoration:none; cursor:pointer; outline:none;
     }
-    button:hover, a.btn:hover{ filter:brightness(1.1) }
-    button:active, a.btn:active, .active{ border-color:var(--ok); color:var(--ok) }
-    button:focus-visible, a.btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px }
+    a.btn:hover, button:hover{ filter:brightness(1.1) }
+    a.btn:active, button:active, .active{ border-color:var(--ok); color:var(--ok) }
+    a.btn:focus-visible, button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px }
     hr{ width:100%; border:0; border-top:1px solid var(--line); opacity:.35; margin:10px 0 0 0 }
   </style>
 </head>
@@ -77,12 +77,81 @@ MIN_HTML = """
       <h1>HALLO MAMA!</h1>
       <p>Minimal mode · zwart scherm · witte lijnen · gele randen · groen bij klik.</p>
       <div class="row">
-        <a class="btn" href="/" onclick="this.classList.add('active')">OK</a>
-        <button onclick="this.classList.add('active')">Klik</button>
+        <a class="btn" href="/" id="okBtn">OK</a>
+        <button id="metronomeBtn">Klik</button>
       </div>
       <hr>
     </section>
   </main>
+
+  <script>
+  (function(){
+    // --- WebAudio metronoom (1 tik per seconde), geen externe audio ---
+    let AC = null;              // AudioContext
+    let schedulerTimer = null;  // setInterval id
+    let nextTickTime = 0;       // in AC.currentTime
+    const scheduleAhead = 0.2;  // plan 200ms vooruit
+    const lookaheadMs  = 50;    // elke 50ms checken
+
+    function ensureAC(){
+      if (AC) return AC;
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      return AC;
+    }
+
+    // Kort klikje: 1kHz, ~35ms, snelle decay -> 'metronoom' feel
+    function scheduleClick(atTime){
+      const ac = ensureAC();
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = "square";           // lekker snappy
+      osc.frequency.value = 1000;
+
+      // Envelope: snelle attack, snelle decay
+      const g = gain.gain;
+      g.setValueAtTime(0.0001, atTime);
+      g.exponentialRampToValueAtTime(0.6, atTime + 0.002);
+      g.exponentialRampToValueAtTime(0.0001, atTime + 0.035);
+
+      osc.connect(gain).connect(ac.destination);
+      osc.start(atTime);
+      osc.stop(atTime + 0.05);
+    }
+
+    function startMetronome(){
+      const ac = ensureAC();
+      // sommige browsers vereisen expliciet resume na user gesture
+      if (ac.state === "suspended") { ac.resume().catch(()=>{}); }
+
+      // Start op de eerstvolgende hele seconde (kleine offset om tik hoorbaar te garanderen)
+      const now = ac.currentTime;
+      nextTickTime = Math.ceil(now) + 0.05;
+
+      if (schedulerTimer) clearInterval(schedulerTimer);
+      schedulerTimer = setInterval(() => {
+        const ct = ac.currentTime;
+        while (nextTickTime < ct + scheduleAhead) {
+          scheduleClick(nextTickTime);
+          nextTickTime += 1.0; // elke seconde
+        }
+      }, lookaheadMs);
+    }
+
+    function stopMetronome(){
+      if (schedulerTimer){ clearInterval(schedulerTimer); schedulerTimer = null; }
+    }
+
+    // --- UI binding (toggle) ---
+    const metBtn = document.getElementById('metronomeBtn');
+    metBtn.addEventListener('click', () => {
+      const active = metBtn.classList.toggle('active');
+      if (active) startMetronome(); else stopMetronome();
+    });
+
+    // OK blijft gewoon reloaden (anchor met href="/")
+    // Tip: wil je SPA-achtig gedrag, preventDefault + locatie.replace, maar nu niet nodig.
+  })();
+  </script>
 </body>
 </html>
 """
