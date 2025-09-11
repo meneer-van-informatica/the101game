@@ -74,7 +74,7 @@ MIN_HTML = """
 <body>
   <main class="wrap">
     <section class="box">
-      <h1>THE101GAME</h1>
+      <h1>Test</h1>
       <p>Minimal mode · zwart scherm · witte lijnen · gele randen · groen bij klik.</p>
       <div class="row">
         <a class="btn" href="/" id="okBtn">OK</a>
