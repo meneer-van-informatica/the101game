@@ -1,3 +1,58 @@
+# === MINIMAL HOMEPAGE HTML (nieuw) ===
+MIN_HTML = """
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>HALLO MAMA!</title>
+  <meta name="color-scheme" content="dark">
+  <style>
+    :root{ --bg:#000; --fg:#fff; --line:#fff; --accent:#ffd400; --ok:#00e676; }
+    *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent }
+    html,body{
+      height:100%; margin:0; background:var(--bg); color:var(--fg);
+      font: clamp(16px,2.5vw,20px)/1.25 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;
+    }
+    .wrap{ min-height:100%; display:grid; place-items:center; padding:12vh 6vw }
+    .box{
+      display:flex; flex-direction:column; align-items:center; gap:24px;
+      border:1px solid var(--line); border-radius:10px; padding:10vh 8vw;
+      width:min(92vw,1000px);
+    }
+    h1{ margin:0; font-weight:800; text-transform:uppercase; letter-spacing:.5px;
+        font-size:clamp(28px,8vw,80px); text-align:center; }
+    p{ margin:0; opacity:.9; text-align:center; max-width:60ch }
+    .row{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center }
+    button, a.btn{
+      appearance:none; background:transparent; color:var(--fg);
+      border:2px solid var(--accent); border-radius:8px;
+      padding:.75em 1.1em; font-weight:700; letter-spacing:.3px;
+      text-decoration:none; cursor:pointer; outline:none;
+    }
+    button:hover, a.btn:hover{ filter:brightness(1.1) }
+    button:active, a.btn:active, .active{ border-color:var(--ok); color:var(--ok) }
+    button:focus-visible, a.btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px }
+    hr{ width:100%; border:0; border-top:1px solid var(--line); opacity:.35; margin:10px 0 0 0 }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="box">
+      <h1>HALLO MAMA!</h1>
+      <p>Minimal mode · zwart scherm · witte lijnen · gele randen · groen bij klik.</p>
+      <div class="row">
+        <a class="btn" href="/" onclick="this.classList.add('active')">OK</a>
+        <button onclick="this.classList.add('active')">Klik</button>
+      </div>
+      <hr>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
 # app.py — W0L1 · THE ENGINE / DE MOTOR
 # -------------------------------------
 # Eén motor voor the101game.io (EN) en the101game.nl (NL)
@@ -395,7 +450,7 @@ BASE_HTML = """
 @app.route("/")
 def index():
     lang = get_lang()
-    return render_template_string(BASE_HTML, lang=lang, t=STRINGS[lang])
+    return MIN_HTML
 
 
 # -------------------------
