@@ -57,9 +57,9 @@
 </div>
 
 <script>
-    let impact = 0;
+    let impact = 0;  // Start de score vanaf 0
 
-    // Update de impactmeter en verander de kleur
+    // Update de impactscore afhankelijk van de keuze
     function updateImpact(choice) {
         if (choice === "A") {
             impact += 1;
@@ -68,34 +68,35 @@
         } else if (choice === "C") {
             impact += 2;
         } else if (choice === "D") {
-            impact += 3;
+            impact += 3;  // Grote impact
         } else if (choice === "E") {
-            impact -= 2;
+            impact -= 2;  // Negatieve impact
         }
 
-        // Update de impactmeter
+        // Toon de score (impact) aan de speler
         let impactMeter = document.getElementById('impactMeter');
         impactMeter.textContent = "Impact: " + impact;
-
+        
         // Verander kleur op basis van impact
         if (impact > 5) {
-            impactMeter.style.color = "green";
+            impactMeter.style.color = "green";  // Positieve impact
         } else if (impact < 0) {
-            impactMeter.style.color = "red";
+            impactMeter.style.color = "red";   // Negatieve impact
         } else {
-            impactMeter.style.color = "white";
+            impactMeter.style.color = "white"; // Neutrale impact
         }
     }
 
-    // Verstuur de keuze naar de Flask-backend
+    // Verstuur de keuze naar de Flask-backend en werk de blockchain bij
     function updateBlockchain(choice) {
         fetch(`/add_block/${choice}`)
             .then(response => response.json())
             .then(data => {
-                // Toon de blockchain data op de pagina
+                // Update de blockchain data op de pagina
+                let blockchain = data.blockchain;
                 let blockchainDisplay = document.getElementById('blockchainDisplay');
                 blockchainDisplay.innerHTML = '<h3>Blockchain:</h3>';
-                data.blockchain.forEach(block => {
+                blockchain.forEach(block => {
                     let blockElement = document.createElement('div');
                     blockElement.textContent = block;
                     blockchainDisplay.appendChild(blockElement);
