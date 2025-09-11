@@ -56,5 +56,18 @@ def add_block(choice):
         "blockchain": [block.data for block in game_chain.chain]
     })
 
+# Voeg de impactlogica toe in de app.py
+impact = 0
+
+def update_impact(choice):
+    global impact
+    if choice == "A":
+        impact += 1
+    elif choice == "B":
+        impact -= 1
+    elif choice == "C":
+        impact += 2
+
+
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')
