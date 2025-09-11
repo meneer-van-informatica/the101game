@@ -4,4 +4,11 @@ function startGame() {
     // Je kunt de gebruiker ook doorsturen naar een andere pagina:
     // window.location.href = '/game'; 
 }
-g
+
+function startGame() {
+    // Verberg de landing page
+    document.querySelector('.landing-page').style.display = 'none';
+    
+    // Toon het game scherm
+    document.getElementById('gameScreen').style.display = 'flex';
+}
