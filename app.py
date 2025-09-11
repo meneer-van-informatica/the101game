@@ -21,10 +21,9 @@ class Blockchain:
         new_block = Block(len(self.chain), time.time(), data, last_block.hash)
         self.chain.append(new_block)
 
-    def print_chain(self):
-        """Print de volledige blockchain"""
-        for block in self.chain:
-            print(f"Block {block.index}: {block.data} | Hash: {block.hash}")
+    def get_chain(self):
+        """Retourneer de volledige blockchain"""
+        return [block.data for block in self.chain]
 
 # Block klasse
 class Block:
@@ -53,21 +52,8 @@ def add_block(choice):
     game_chain.add_block(f"Speler kiest optie {choice}")
     return jsonify({
         "message": f"Keuze {choice} geregistreerd!",
-        "blockchain": [block.data for block in game_chain.chain]
+        "blockchain": game_chain.get_chain()  # We sturen de blockchain terug naar de frontend
     })
-
-# Voeg de impactlogica toe in de app.py
-impact = 0
-
-def update_impact(choice):
-    global impact
-    if choice == "A":
-        impact += 1
-    elif choice == "B":
-        impact -= 1
-    elif choice == "C":
-        impact += 2
-
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')

@@ -1,12 +1,12 @@
 import unittest
-from app import update_impact  # Zorg ervoor dat update_impact uit app.py komt
+from app import update_impact, impact  # Zorg ervoor dat je de impact van app.py importeert
 
 class TestImpactLogic(unittest.TestCase):
 
     def setUp(self):
-        # Stel de initiële impact in voor elke test
+        """Stel de initiële impact in voor elke test"""
         global impact
-        impact = 0
+        impact = 0  # Reset de impact naar 0 voor elke test
 
     def test_update_impact(self):
         """Test of de impact correct wordt bijgewerkt"""
