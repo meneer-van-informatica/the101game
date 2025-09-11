@@ -3,33 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>W0L1 - The 101 Game</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>W0L9 - Color Click Game</title>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: black; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 50px); /* 10 columns */
+            grid-template-rows: repeat(7, 50px);    /* 7 rows */
+            gap: 5px;
+        }
+        .block {
+            width: 50px;
+            height: 50px;
+            background-color: #333;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <div class="landing-page">
-        <header>
-            <h1>Welcome to W0L1</h1>
-            <p>Your journey begins here!</p>
-        </header>
+    <div class="grid" id="grid"></div>
 
-        <section class="buttons">
-            <button class="btn" onclick="window.location.href='/about';">About the Game</button>
-            <button class="btn" onclick="startGame();">Start Game</button>
-        </section>
+    <script>
+        let level = 1;
+        const totalLevels = 10;
+        let score = 0;
 
-        <footer>
-            <p>&copy; 2025 The 101 Game. All rights reserved.</p>
-        </footer>
-    </div>
+        function createGrid() {
+            const gridContainer = document.getElementById('grid');
+            gridContainer.innerHTML = ''; // Clear the grid before adding new blocks
 
-    <div id="gameScreen" style="display:none;">
-        <div id="heartScene">
-            <h1>Hallo Mama!</h1>
-            <div class="heart"></div>
-        </div>
-    </div>
+            for (let i = 0; i < 70; i++) {  // 10 x 7 = 70 blocks
+                const block = document.createElement('div');
+                block.classList.add('block');
+                block.addEventListener('click', () => handleBlockClick(block));
 
-    <script src="app.js"></script>
+                gridContainer.appendChild(block);
+            }
+
+            updateGridColors();
+        }
+
+        function handleBlockClick(block) {
+            if (block.style.backgroundColor === 'green') { // Correct block color
+                score++;
+                if (score === level) {
+                    if (level < totalLevels) {
+                        level++;
+                        score = 0;
+                        setTimeout(startLevel, 500);
+                    }
+                }
+            }
+        }
+
+        function updateGridColors() {
+            const blocks = document.querySelectorAll('.block');
+            blocks.forEach(block => {
+                const randomColor = getRandomColor();
+                block.style.backgroundColor = randomColor;
+
+                // 50% chance to make the block "clickable" (green)
+                if (Math.random() < 0.5) {
+                    block.dataset.clickable = true;
+                    block.style.backgroundColor = 'green'; // Correct color
+                } else {
+                    block.dataset.clickable = false;
+                }
+            });
+        }
+
+        function getRandomColor() {
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function startLevel() {
+            createGrid();
+            setInterval(updateGridColors, 1000); // Update grid colors every second
+        }
+
+        startLevel();
+    </script>
 </body>
 </html>
