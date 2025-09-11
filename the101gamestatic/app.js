@@ -1,0 +1,1 @@
+﻿console.log('THE101GAME static ready');

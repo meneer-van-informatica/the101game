@@ -1,1 +1,10 @@
+﻿/venv/
+/.venv/
+/_backup/
+/vhosts/
+/cgi-bin/
+/html/
+/__pycache__/
+/the101gameengine/engine.db
+*.pyc
 node_modules/
