@@ -588,8 +588,50 @@ window.addEventListener('keydown',     ()=>prime(), {once:true, capture:true});
 setTimeout(()=>{ location.assign('/w0l0.html'); }, 30000);
 </script>
 <!-- DOTS+CASES v1 END -->
-</body>
+<script>/* clock+ascii */
+(function(){
+  // ---- locale helper
+  function loc(){ try{ return (localStorage.getItem('site_lang')||'en')==='nl' ? 'nl-NL' : 'en-GB'; }catch(_){ return 'en-GB'; } }
+  function fmtDate(d){
+    const l = loc();
+    const dd = new Intl.DateTimeFormat(l,{day:'2-digit'}).format(d);
+    const mm = new Intl.DateTimeFormat(l,{month:'long'}).format(d);
+    const yy = new Intl.DateTimeFormat(l,{year:'numeric'}).format(d);
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mi = String(d.getMinutes()).padStart(2,'0');
+    const ss = String(d.getSeconds()).padStart(2,'0');
+    return `${dd} ${mm} ${yy} ${hh}:${mi}:${ss}`;
+  }
+
+  // ---- ascii meter: 10s window, bar of 30 chars
+  const CLOCK = document.getElementById('clock');
+  const BAR   = document.getElementById('asciiBar');
+  const LEN   = 30;      // ascii breedte
+  const WIN   = 10_000;  // 10s
+  let t0 = performance.now();
+
+  function draw(now){
+    // datum/tijd
+    const d = new Date();
+    if (CLOCK) CLOCK.textContent = fmtDate(d);
+
+    // 0..1 over 10s
+    let f = ((now - t0) % WIN) / WIN;         // 0→1
+    let val = 1 - f;                          // 1.0 → 0.0
+    const fill = Math.round(val * LEN);
+    const bar = '[' + '#'.repeat(fill) + '-'.repeat(LEN-fill) + `]  (${val.toFixed(1)})`;
+    if (BAR) BAR.textContent = bar;
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  // focus default op RED (tab start)
+  try{ document.getElementById('dot-red')?.focus({preventScroll:true}); }catch(_){}
+})();
+</script></body>
 </html>
+
 
 
 
