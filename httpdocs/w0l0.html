@@ -1,264 +1,200 @@
 ﻿<!doctype html>
-<html lang="nl">
+<html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l0 · mama + seconds</title>
-<style>/* phone frame css */
-:root{ --phone-w: min(100vw, 420px); --bg:#000; --fg:#eaeaea }
-html,body{background:var(--bg);color:var(--fg)}
-/* container die op desktop centreert en op mobiel fullscreen is */
-#phone{ width:var(--phone-w); min-height:100dvh; margin:0 auto; position:relative }
-@supports (height: 100dvh){ #phone{ min-height:100dvh } }
-/* fixed elementen binnen het frame begrenzen */
-#phone .fit-x{ left:0; right:0; }
-@media (min-width:600px){
-  body{ display:grid; place-items:start center; }
-}
-/* zorg dat bars die 'fixed' zijn niet meer de volle breedte pakken */
-.bar{ inset:auto auto auto auto; width:100%; max-width:var(--phone-w); margin:0 auto }
-</style>
+<title>w0l0 · mama + seconds + snare</title>
 <style>
-  :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:68px;--pad:10px}
-  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
-  .bar{position:fixed;top:0;left:0;right:0;min-height:var(--hbar);
-       padding:calc(env(safe-area-inset-top) + 0px) var(--pad) 6px var(--pad);
-       display:grid;grid-template-columns:1fr auto;gap:10px;border-bottom:1px solid var(--line);
-       background:#000000e6;backdrop-filter:blur(2px);z-index:10}
-  .left{min-width:0}
-  .right{display:flex;align-items:center;gap:10px}
-  .btn{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
+  :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a; --h:64px }
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
+  #phone{width:var(--phone-w);min-height:100dvh;margin:0 auto}
+  .bar{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;
+       padding:10px;border-bottom:1px solid var(--line);background:#000000e8;backdrop-filter:blur(2px)}
   .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #clock{opacity:.9}
+  .right{display:flex;gap:10px;align-items:center}
+  .btn{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
   .meter input{width:120px}
-  #wrap{position:fixed;left:0;right:0;top:calc(var(--hbar) + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);padding:6px var(--pad)}
-  #view{position:relative;width:100%;height:100%;border:1px dashed #444;overflow:hidden;
+  #wrap{padding:8px}
+  #view{position:relative;width:100%;height:60vh;border:1px dashed #444;overflow:hidden;
         background-image:
           repeating-linear-gradient(to right, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/40)),
           repeating-linear-gradient(to bottom, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/400));}
   .blk{position:absolute;left:0;top:0;width:calc(100%/40);height:calc(100%/400);outline:1px solid #555;border-radius:2px}
   #legend{position:absolute;left:8px;right:8px;top:8px;height:6px;border-radius:3px;border:1px solid #333;opacity:.9;background:linear-gradient(90deg,hsl(0 90% 50%),hsl(120 90% 50%))}
-  /* autoplay gate */
   #autoplay-gate{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.65);z-index:99999}
   #autoplay-gate.show{display:grid}
   #autoplay-gate .card{color:#eaeaea;background:#0b0b0bcc;border:1px solid #222;border-radius:12px;padding:14px 16px;text-align:center;max-width:320px}
-  #autoplay-gate .card b{display:block;margin-bottom:6px}
   #autoplay-gate .tip{opacity:.8;font-size:.9em}
 </style>
-<body><div id="phone">
+<body>
+<div id="phone">
   <div class="bar">
     <div class="left">
-      <div class="msg" id="mama">...</div>
-      <div class="msg" id="line2">...</div>
+      <div class="msg" id="m1">...</div>
+      <div class="msg" id="m2">...</div>
     </div>
     <div class="right">
       <span id="clock">-- -- ---- --:--:--</span>
       <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
       <a class="btn" href="/">home</a>
-      <button id="reset" class="btn">reset</button>
-      <button id="stop"  class="btn">stop</button>
     </div>
   </div>
-
-  <section id='story'></section>
-<section id='story'></section>
-<div id="wrap">
+  <div id="wrap">
     <section id="view" aria-label="tetris 40x400">
       <div id="legend" aria-hidden="true"></div>
     </section>
   </div>
+</div>
 
-  <div id="autoplay-gate" role="dialog" aria-modal="true">
-    <div class="card">
-      <b>tap to start sound</b>
-      <div class="tip">(volume from 0 -> 100 during first block)</div>
-    </div>
+<div id="autoplay-gate" role="dialog" aria-modal="true">
+  <div class="card">
+    <b>tap to start sound</b>
+    <div class="tip">(volume from 0 -> 100 during first block)</div>
   </div>
+</div>
 
 <script>
-/* lang sync */
-(function(){var L=localStorage.getItem('site_lang')||'en';document.documentElement.setAttribute('lang',L);})();
-
-/* clock dd mmmm yyyy HH:MM:SS */
+/* lang + text */
 (function(){
-  const el=document.getElementById('clock');
+  const L=localStorage.getItem('site_lang')||'en';
+  document.documentElement.setAttribute('lang',L);
   function pad(n){return String(n).padStart(2,'0')}
-  function fmt(d,lang){
+  function fmt(d){
     const dd=pad(d.getDate());
-    const month=d.toLocaleString(lang||'nl-NL',{month:'long'});
+    const month=d.toLocaleString(L==='en'?'en-US':'nl-NL',{month:'long'});
     const yyyy=d.getFullYear();
     const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
     return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
   }
-  function tick(){ const L=localStorage.getItem('site_lang')||'en'; const now=new Date(); el.textContent=fmt(now, L==='en'?'en-US':'nl-NL'); }
-  setInterval(tick, 250); tick();
-})();
-
-/* mama line + case */
-(function(){
-  const L = localStorage.getItem('site_lang') || 'en';
-  let msg = localStorage.getItem('w_msg_text') || (L==='nl'?'hallo mama':'HELLO MAMA');
-  let kase = (L==='nl'?'1':'0');
-  // format date
-  function fmtDate(L){
-    const d=new Date();
-    const dd=String(d.getDate()).padStart(2,'0');
-    const month=d.toLocaleString(L==='en'?'en-US':'nl-NL',{month:'long'});
-    const yyyy=d.getFullYear();
-    const HH=String(d.getHours()).padStart(2,'0');
-    const MM=String(d.getMinutes()).padStart(2,'0');
-    const SS=String(d.getSeconds()).padStart(2,'0');
-    return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
-  }
   function render(){
-    const mEl=document.getElementById('mama');
-    const l2=document.getElementById('line2');
-    const L = localStorage.getItem('site_lang') || 'en';
-    const date = fmtDate(L);
-    if (L==='en'){
-      mEl.textContent = 'HELLO MAMA.';
-      l2.textContent  = ('THE CLOCK SAYS ' + date).toUpperCase() + ' · CASE: 0';
-    } else {
-      mEl.textContent = 'hallo mama.';
-      l2.textContent  = ('de klok zegt ' + date).toLowerCase() + ' · case: 1';
+    const d=fmt(new Date());
+    if(L==='nl'){
+      document.getElementById('m1').textContent='hallo mama.';
+      document.getElementById('m2').textContent=('de klok zegt '+d).toLowerCase()+' · case: 1';
+    }else{
+      document.getElementById('m1').textContent='HELLO MAMA.';
+      document.getElementById('m2').textContent=('THE CLOCK SAYS '+d).toUpperCase()+' · CASE: 0';
     }
   }
-  setInterval(render, 250); render();
+  setInterval(render,250); render();
+})();
+
+/* clock */
+(function(){
+  const el=document.getElementById('clock');
+  function pad(n){return String(n).padStart(2,'0')}
+  function fmt(d){
+    const L=localStorage.getItem('site_lang')||'en';
+    const dd=pad(d.getDate());
+    const month=d.toLocaleString(L==='en'?'en-US':'nl-NL',{month:'long'});
+    const yyyy=d.getFullYear();
+    const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
+    return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
+  }
+  setInterval(()=>{ el.textContent=fmt(new Date()); }, 250);
 })();
 
 /* audio core */
-let ac, comp, preGain, master;
+let ac, pre, comp, master;
 function initAudio(){ if(ac) return;
   ac=new (window.AudioContext||window.webkitAudioContext)();
-  preGain=ac.createGain(); preGain.gain.value=4.0;
+  pre=ac.createGain(); pre.gain.value=4.0;
   comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-  master=ac.createGain(); master.gain.value=0.0; // start stil (ramp on first fall)
-  preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
+  master=ac.createGain(); master.gain.value=0.0;
+  pre.connect(comp); comp.connect(master); master.connect(ac.destination);
 }
-function setVolume(v=0){ initAudio(); const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; const el=document.getElementById('vol'); if(el) el.value=String(n); localStorage.setItem('w_audio_vol', String(n)); }
+function setVolume(v=0){ initAudio(); const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; const s=document.getElementById('vol'); if(s) s.value=String(n); }
 
-/* gate + intent */
+/* unlock gate (uses intent from index if fresh) */
 (function(){
   const gate=document.getElementById('autoplay-gate');
-  function showGate(){ gate && gate.classList.add('show') }
-  function hideGate(){ gate && gate.classList.remove('show') }
-  async function tryStartSilently(){ try{ initAudio(); setVolume(0); }catch(_){}
+  function show(){gate.classList.add('show')} function hide(){gate.classList.remove('show')}
+  function fresh(){ try{const ts=parseInt(localStorage.getItem('w_audio_intent_ts')||'0',10); return ts && (Date.now()-ts)<8000}catch(_){return false} }
+  async function tryStart(){ try{initAudio(); setVolume(0);}catch(_){}
     try{ if(ac && ac.state==='suspended') await ac.resume(); }catch(_){}
-    if(ac && ac.state==='running'){ hideGate(); return true } showGate(); return false }
-  function userUnlock(){ try{ initAudio(); ac && ac.resume && ac.resume(); }catch(_){}
-    hideGate(); window.removeEventListener('pointerdown', userUnlock, true); window.removeEventListener('keydown', userUnlock, true); gate && gate.removeEventListener('click', userUnlock); }
-  window.addEventListener('pointerdown', userUnlock, true);
-  window.addEventListener('keydown', userUnlock, true);
-  gate && gate.addEventListener('click', userUnlock, {passive:true});
-  function intentFresh(){ try{ const ts=parseInt(localStorage.getItem('w_audio_intent_ts')||'0',10); return ts && (Date.now()-ts)<8000 }catch(_){ return false } }
-  function tryFromIntent(){ if(!intentFresh()) return; try{ initAudio(); ac && ac.resume && ac.resume(); setVolume(0); }catch(_){} hideGate(); }
-  if (document.readyState==='complete'||document.readyState==='interactive'){ tryFromIntent(); tryStartSilently(); }
-  else document.addEventListener('DOMContentLoaded', ()=>{ tryFromIntent(); tryStartSilently(); }, {once:true});
+    if(ac && ac.state==='running'){ hide(); return true } show(); return false }
+  function firstTap(){ try{initAudio(); ac&&ac.resume&&ac.resume();}catch(_){}
+    hide(); window.removeEventListener('pointerdown',firstTap,true); window.removeEventListener('keydown',firstTap,true); }
+  window.addEventListener('pointerdown',firstTap,true); window.addEventListener('keydown',firstTap,true);
+  if(fresh()) { try{initAudio(); ac&&ac.resume&&ac.resume(); setVolume(0);}catch(_){ } hide(); }
+  (document.readyState==='complete'||document.readyState==='interactive') ? tryStart() : document.addEventListener('DOMContentLoaded', tryStart, {once:true});
 })();
 
-/* seconds-driven fall visuals + sound */
-const W=40,H=400, SPAWN_MS=5000, FALL_SLOW=3000, FALL_FAST=900;
+/* sound helpers (kick, snare, tick, chord) */
+function kick(at=ac.currentTime){
+  initAudio(); const o=ac.createOscillator(), g=ac.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(160,at); o.frequency.exponentialRampToValueAtTime(60, at+0.12);
+  g.gain.setValueAtTime(0.9,at); g.gain.exponentialRampToValueAtTime(0.0001, at+0.14);
+  o.connect(g); g.connect(pre); o.start(at); o.stop(at+0.16);
+}
+function snare(at=ac.currentTime){
+  initAudio();
+  // white noise burst
+  const len=ac.sampleRate*0.25, buf=ac.createBuffer(1,len,ac.sampleRate), data=buf.getChannelData(0);
+  for(let i=0;i<len;i++){ data[i]=Math.random()*2-1; }
+  const src=ac.createBufferSource(); src.buffer=buf;
+  const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; bp.Q.value=0.8;
+  const hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=600;
+  const g=ac.createGain();
+  g.gain.setValueAtTime(0.9,at); g.gain.exponentialRampToValueAtTime(0.0001, at+0.18);
+  src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(pre);
+  src.start(at); src.stop(at+0.2);
+  // metal "tss" (triangle burst)
+  const o=ac.createOscillator(), g2=ac.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(5000,at);
+  g2.gain.setValueAtTime(0.35,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.18);
+  o.connect(g2); g2.connect(pre); o.start(at); o.stop(at+0.2);
+}
+function padumTss(){
+  if(!ac) initAudio();
+  const t=ac.currentTime;
+  kick(t+0.00);          // pa
+  kick(t+0.08);          // dum
+  snare(t+0.16);         // tss
+}
+const W=40,H=400; const FALL_SLOW=3000, FALL_FAST=900; const SPAWN_MS=5000;
 function freqForX(x){ const f0=261.63, span=24, semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
-function currentFallMs(){ const s=(new Date()).getSeconds(); const a=s/59; return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a; }
-const view=document.getElementById('view');
 function chord(x){ initAudio(); if(ac.state==='suspended') ac.resume(); const root=freqForX(x), t0=ac.currentTime+0.02;
   [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
     g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
-    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4); });
+    o.connect(g); g.connect(pre); o.start(t0+k*0.004); o.stop(t0+0.4); });
 }
 function tickSound(x,y){ initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime, f=freqForX(x)*(0.85+0.3*((y||0)/H));
   const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.setValueAtTime(f,t);
   g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
-  o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.08);
+  o.connect(g); g.connect(pre); o.start(t); o.stop(t+0.08);
 }
+function currentFallMs(){ const s=(new Date()).getSeconds(); const a=s/59; return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a; }
+
+/* falling block visuals + landing snare */
+const view=document.getElementById('view');
 let firstLanded=false;
 function spawnAndDrop(){
   const x=Math.floor(Math.random()*W);
   const blk=document.createElement('div'); blk.className='blk';
-  blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=`hsl(${120*(x/(W-1))} 90% 50% / .65)`; view.appendChild(blk);
+  blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=`hsl(${120*(x/(W-1))} 90% 50% / .65)`;
+  view.appendChild(blk);
   chord(x);
+
   let y=0, last=performance.now(), lastTick=-1;
   function step(now){
-    const dt = now - last; last = now;
-    const fm = currentFallMs();
-    const vy = H / fm; y += vy * dt;
+    const dt=now-last; last=now;
+    const fm=currentFallMs(); y += (H/fm)*dt;
     if(!firstLanded){ const p=Math.max(0,Math.min(1,y/H)); setVolume(Math.round(p*100)); }
     const phase=Math.floor(y/12); if(phase>lastTick){ lastTick=phase; tickSound(x,y); }
     blk.style.top=(Math.min(y,H-1)*100/H)+'%';
     if(y>=H-1){
-      if(!firstLanded){ firstLanded=true; setVolume(100); localStorage.setItem('w_audio_continue','1'); }
+      if(!firstLanded){ firstLanded=true; setVolume(100); }
+      padumTss();
       blk.remove(); return;
     }
     requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
-setVolume(0); spawnAndDrop(); const spawner=setInterval(()=>{ if(!firstLanded) spawnAndDrop(); else clearInterval(spawner); }, 5000);
 
-/* controls */
-document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=false; setVolume(0); view.querySelectorAll('.blk').forEach(n=>n.remove()); spawnAndDrop();};
-document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue');};
+setVolume(0); spawnAndDrop();
+const spawner=setInterval(()=>spawnAndDrop(), SPAWN_MS);
 document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
-</script>
-</div><script>
-/* story render */
-(function(){
-  const el = document.getElementById('story');
-  function nl(){
-    return 
-      <h2>informatica: kees 0..4</h2>
-      <p>informatica begon met een tweeling: <b>kees 1</b> (case 0) en <b>kees 2</b> (case 1).</p>
-      <p>kees 1 zei altijd <b>ja</b>, kees 2 altijd <b>nee</b>. prima voor bits, saai voor gesprekken.</p>
-      <p>toen kwam <b>kees 0</b> (case 2): <b>misschien</b> — de buffer tussen ja en nee.</p>
-      <p>\"waar is <b>kees 4</b>?\" in de <b>toekomst</b>: <code>100₂</code>. hij zegt: <b>ja, maar later</b>.</p>
-    ;
-  }
-  function en(){
-    return 
-      <h2>computing: kees 0..4</h2>
-      <p>computing started with twins: <b>kees 1</b> (case 0) and <b>kees 2</b> (case 1).</p>
-      <p>kees 1 always said <b>yes</b>, kees 2 always <b>no</b>. great for bits, boring for chats.</p>
-      <p>then <b>kees 0</b> (case 2) arrived: <b>maybe</b> — the buffer between yes and no.</p>
-      <p>\"where is <b>kees 4</b>?\" in the <b>future</b>: <code>100₂</code>. he says: <b>yes, but later</b>.</p>
-    ;
-  }
-  function render(){
-    const L = localStorage.getItem('site_lang') || 'en';
-    el.innerHTML = (L==='nl') ? nl() : en();
-  }
-  if (el) { render(); }
-})();
-</script>
-<script>
-/* story render */
-(function(){
-  const el = document.getElementById('story');
-  function nl(){
-    return 
-      <h2>informatica: kees 0..4</h2>
-      <p>informatica begon met een tweeling: <b>kees 1</b> (case 0) en <b>kees 2</b> (case 1).</p>
-      <p>kees 1 zei altijd <b>ja</b>, kees 2 altijd <b>nee</b>. prima voor bits, saai voor gesprekken.</p>
-      <p>toen kwam <b>kees 0</b> (case 2): <b>misschien</b> — de buffer tussen ja en nee.</p>
-      <p>\"waar is <b>kees 4</b>?\" in de <b>toekomst</b>: <code>100₂</code>. hij zegt: <b>ja, maar later</b>.</p>
-    ;
-  }
-  function en(){
-    return 
-      <h2>computing: kees 0..4</h2>
-      <p>computing started with twins: <b>kees 1</b> (case 0) and <b>kees 2</b> (case 1).</p>
-      <p>kees 1 always said <b>yes</b>, kees 2 always <b>no</b>. great for bits, boring for chats.</p>
-      <p>then <b>kees 0</b> (case 2) arrived: <b>maybe</b> — the buffer between yes and no.</p>
-      <p>\"where is <b>kees 4</b>?\" in the <b>future</b>: <code>100₂</code>. he says: <b>yes, but later</b>.</p>
-    ;
-  }
-  function render(){
-    const L = localStorage.getItem('site_lang') || 'en';
-    el.innerHTML = (L==='nl') ? nl() : en();
-  }
-  if (el) { render(); }
-})();
 </script>
 </body>
 </html>
-
-
-
