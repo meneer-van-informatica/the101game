@@ -30,6 +30,7 @@
 </style>
 <body class="caps-off">
 <div id="phone">
+<div id='clock'></div><div class='secwrap'><div id='secbar'><div class='fill' id='secfill'></div><div class='val' id='secval'>1.0</div></div></div>
   <header><div id="clock">—</div></header>
   <main>
     <div id="en" class="choice en selected">CASE 0: ENGLISH</div>
@@ -119,5 +120,82 @@
   }, DURATION_MS);
 })();
 </script>
+<script>
+/* 10s seconds bar engine */
+(function(){
+  // standaard: 10s voor keuze 0 (LANG)
+  var DUR = 10_000;
+  var t0  = 0, raf = 0, routed = false;
+
+  function fmtDate(d){
+    const m = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = m[d.getMonth()];
+    const yyyy = d.getFullYear();
+    const HH = String(d.getHours()).padStart(2,'0');
+    const MM = String(d.getMinutes()).padStart(2,'0');
+    const SS = String(d.getSeconds()).padStart(2,'0');
+    return dd+' '+mm+' '+yyyy+' '+HH+':'+MM+':'+SS;
+  }
+
+  function updateClock(){
+    var el = document.getElementById('clock');
+    if (el) el.textContent = fmtDate(new Date());
+  }
+
+  function loop(now){
+    updateClock();
+
+    if (!t0) t0 = now;
+    var frac = (now - t0) / DUR; if (frac > 1) frac = 1;
+    var value = 1 - frac; // 1.0 → 0.0
+    var fill  = document.getElementById('secfill');
+    var val   = document.getElementById('secval');
+    if (fill) fill.style.width = (value*100) + '%';
+    if (val)  val.textContent  = value.toFixed(1);
+
+    if (frac >= 1 && !routed){
+      routed = true;
+      // taal al gezet via tiles/red dot; fallback op en
+      try{ if(!localStorage.getItem('site_lang')) localStorage.setItem('site_lang','en'); }catch(_){}
+      location.assign('/w0l0.html');
+      return;
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  // tik-tok per seconde (snare-achtig) – hergebruik bestaande audio prime indien aanwezig
+  var ac, pre;
+  function initAudio(){
+    if (ac) return;
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    ac = new C();
+    pre = ac.createGain(); pre.gain.value = 3.5;
+    pre.connect(ac.destination);
+  }
+  function prime(){ try{ initAudio(); if (ac.state==='suspended'&&ac.resume) return ac.resume(); }catch(e){} }
+  function snareTick(){
+    if(!ac) return;
+    var t = ac.currentTime + 0.02;
+    var len = ac.sampleRate*0.12, buf = ac.createBuffer(1,len,ac.sampleRate), data = buf.getChannelData(0);
+    for (var i=0;i<len;i++){ data[i] = Math.random()*2-1; }
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var hp = ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=800;
+    var g = ac.createGain(); g.gain.setValueAtTime(0.7,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+    src.connect(hp); hp.connect(g); g.connect(pre); src.start(t); src.stop(t+0.14);
+  }
+
+  // 1) start animatie, 2) klok elke seconde, 3) audio bij 1e interactie en elke seconde
+  document.addEventListener('DOMContentLoaded', function(){
+    requestAnimationFrame(loop);
+    updateClock();
+    setInterval(function(){ updateClock(); prime(); snareTick(); }, 1000);
+  });
+  window.addEventListener('pointerdown', function(){ prime(); }, {once:true, capture:true});
+  window.addEventListener('keydown',     function(){ prime(); }, {once:true, capture:true});
+})();
+</script>
 </body>
 </html>
+
