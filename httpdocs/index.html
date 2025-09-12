@@ -5,6 +5,7 @@
 <meta name='theme-color' content='#000000'>
 <link rel='manifest' href='/manifest.webmanifest'>
 <title>the101game · webapp</title>
+<link rel='stylesheet' href='/stippy/stippy.css'>
 <style>
   :root{--bg:#000;--fg:#eaeaea;--muted:#8a8a8a;--line:#222;--accent:#ffd400;--pad:clamp(12px,3vmin,20px);--fs:clamp(14px,2.2vmax,22px);--fs-lg:clamp(18px,3.2vmax,28px)}
   *{box-sizing:border-box}
@@ -54,5 +55,8 @@
   if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}
   apply();
 </script>
+<div id='stippy' aria-hidden='true'></div>
+<script src='/stippy/stippy.js' defer></script>
 </body>
 </html>
+
