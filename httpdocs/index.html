@@ -3,6 +3,9 @@
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no'>
 <meta name='theme-color' content='#000000'>
+<meta name='apple-mobile-web-app-capable' content='yes'>
+<meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>
+<meta name='app-version' content='20250912141740'>
 <link rel='manifest' href='/manifest.webmanifest'>
 <title>the101game · webapp</title>
 <link rel='stylesheet' href='/stippy/stippy.css'>
@@ -60,9 +63,31 @@
 </script>
 <div id='stippy' aria-hidden='true'></div>
 <script src='/stippy/stippy.js' defer></script>
-<script src='/stippy/w0l0-nav.js' defer></script>
+<script src='/stippy/w0l0-nav.js?v=20250912141740' defer></script>
+<script>
+// sw auto refresh hook
+(function(){
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('/sw.js').then(reg=>{
+      // force page reload once when new controller takes over
+      let refreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+        if(refreshed) return; refreshed = true; location.reload();
+      });
+      // ask current sw for version (optional)
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({type:'GET_VER'});
+      }
+      navigator.serviceWorker.addEventListener('message', ev=>{
+        if(ev.data && ev.data.type==='VER'){ console.log('sw', ev.data.ver); }
+      });
+    }).catch(()=>{});
+  }
+})();
+</script>
 </body>
 </html>
+
 
 
 
