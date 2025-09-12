@@ -10,16 +10,16 @@
 <title>the101game · webapp</title>
 <link rel='stylesheet' href='/stippy/stippy.css'>
 <style>
-  :root{--bg:#000;--fg:#eaeaea;--muted:#8a8a8a;--line:#222;--accent:#ffd400;--pad:clamp(12px,3vmin,20px);--fs:clamp(14px,2.2vmax,22px);--fs-lg:clamp(18px,3.2vmax,28px)}
+  :root{--bg:#000;--fg:#eaeaea;--muted:#8a8a8a;--line:#222;--accent:#ffd400;--pad:clamp(8px,2.5vmin,16px);--fs:clamp(14px,2.2vmax,22px);--fs-lg:clamp(18px,3.2vmax,28px)}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:var(--fs)/1.5 ui-monospace,consolas,monospace}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:var(--fs)/1.35 ui-monospace,consolas,monospace}
   body{min-height:100dvh;display:flex;flex-direction:column}
   .safe{padding:calc(env(safe-area-inset-top) + var(--pad)) calc(env(safe-area-inset-right) + var(--pad)) calc(env(safe-area-inset-bottom) + var(--pad)) calc(env(safe-area-inset-left) + var(--pad))}
   header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid var(--line)}
   header .brand{letter-spacing:.5px}
   header .dot{width:.6rem;height:.6rem;border-radius:50%;background:var(--accent);display:inline-block;margin-left:.5rem}
   main{flex:1;display:flex;flex-direction:column;gap:10px}
-  .block{padding:10px 0;border-bottom:1px dashed var(--line)}
+  \.block{padding:8px 0;border-bottom:1px dashed var(--line)}
   .block:last-child{border-bottom:none}
   .label{opacity:.6}
   .value{font-size:var(--fs-lg);white-space:pre-wrap}
@@ -87,6 +87,7 @@
 </script>
 </body>
 </html>
+
 
 
 

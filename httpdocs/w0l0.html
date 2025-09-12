@@ -4,189 +4,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>w0l0 · tetris</title>
 <style>
-  :root{--bg:#000;--fg:#eaeaea;--line:#222;--pad:clamp(12px,3vmin,20px)}
-  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:16px/1.5 ui-monospace,consolas,monospace}
-  body{min-height:100dvh;display:flex;flex-direction:column}
-  header,footer{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) var(--pad) 8px var(--pad)}
-  header{border-bottom:1px solid var(--line)}
-  footer{border-top:1px solid var(--line);padding-bottom:calc(env(safe-area-inset-bottom) + 8px)}
-  main{flex:1;display:grid;gap:10px;padding:8px var(--pad)}
-  .btn{padding:.5rem .8rem;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:.5rem;text-decoration:none}
-  #hud{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  #counter{opacity:.8}
-  #grid{width:100%;aspect-ratio:40/400;border:1px dashed var(--fg);position:relative;overflow:hidden}
+  :root{--bg:#000;--fg:#eaeaea;--line:#222;--pad:8px;--hbar:44px}
+  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
+  body{min-height:100dvh}
+  .bar{position:fixed;top:0;left:0;right:0;height:var(--hbar);
+       padding:calc(env(safe-area-inset-top) + 0px) var(--pad) 0 var(--pad);
+       display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);background:#000000e6;backdrop-filter:blur(2px);z-index:10}
+  .btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
+  .icon{width:20px;height:20px;display:inline-block}
+  #ctr{margin-left:auto;opacity:.85}
+  #volwrap{display:flex;align-items:center;gap:6px}
+  #vol{width:120px}
+  #grid{position:fixed;left:0;right:0;top:calc(var(--hbar) + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);
+        padding:6px var(--pad);display:grid}
+  #viewport{width:100%;height:100%;border:1px dashed var(--line);position:relative;overflow:hidden}
   #cells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(40,1fr);grid-template-rows:repeat(400,1fr)}
   #cells div{outline:1px solid #111;background:transparent}
   #fall{position:absolute;inset:0;pointer-events:none}
   .blk{position:absolute;width:calc(100%/40);height:calc(100%/400);background:#ffd40033;outline:1px solid #444}
-  .meter{margin-left:auto;display:flex;align-items:center;gap:6px}
-  .meter input{width:120px}
 </style>
 <body>
-<header>
-  <a class="btn" href="/">home</a>
-  <span>tetris viewport 40×400</span>
-  <div id="counter">lines: <b id="lines">0</b> · speed: <b id="spd">1x</b></div>
-  <div class="meter">
-    <label for="vol">volume</label>
-    <input id="vol" type="range" min="0" max="1000" step="10" value="1000">
+  <div class="bar">
+    <a class="btn" href="/">← home</a>
+    <button id="stop"  class="btn">stop</button>
+    <button id="reset" class="btn">reset</button>
+    <div id="ctr">lines: <b id="lines">0</b> · spd <b id="spd">1x</b></div>
+    <div id="volwrap"><span class="icon">🔊</span><input id="vol" type="range" min="0" max="1000" step="10" value="1000"></div>
   </div>
-</header>
 
-<main>
-  <section id="grid" aria-label="tetris 40x400">
-    <div id="cells" aria-hidden="true"></div>
-    <div id="fall"></div>
-  </section>
-</main>
-
-<footer>
-  <button class="btn" id="stop">stopknop</button>
-  <button class="btn" id="reset">reset viewport</button>
-</footer>
+  <div id="grid">
+    <section id="viewport" aria-label="tetris 40x400">
+      <div id="cells" aria-hidden="true"></div>
+      <div id="fall"></div>
+    </section>
+  </div>
 
 <script>
-/* ---------- audio (luid, default 1000) ---------- */
+/* ===== audio (very loud, default 1000) — unlocked on first touch ===== */
 let ac, comp, preGain, master, unlocked=false;
 function initAudio(){
   if(ac) return;
   ac = new (window.AudioContext||window.webkitAudioContext)();
-  // preamp → compressor → master
-  preGain = ac.createGain(); preGain.gain.value = 4.0;          // pre-boost
-  comp = ac.createDynamicsCompressor();
-  comp.threshold.value = -24; comp.knee.value = 15; comp.ratio.value = 20;
-  comp.attack.value = 0.002; comp.release.value = 0.25;
-  master = ac.createGain(); master.gain.value = 1.0;             // hoofdvolume (we schalen met setVolume)
+  preGain = ac.createGain(); preGain.gain.value = 4.0; // pre-boost
+  comp = ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+  master = ac.createGain(); master.gain.value=1.0;
   preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
 }
 function unlockOnce(){
-  if(unlocked) return;
-  initAudio();
-  const resume = ac.resume? ac.resume(): Promise.resolve();
-  resume.finally(()=>{
-    try{ const o=ac.createOscillator(), g=ac.createGain();
-      o.type='sine'; o.frequency.value=440; g.gain.value=0.0001; o.connect(g); g.connect(preGain);
-      o.start(); o.stop(ac.currentTime+0.02);
-    }catch(e){}
-    unlocked=true;
-    ['pointerdown','touchstart','keydown'].forEach(t=>document.removeEventListener(t,unlockOnce,true));
+  if(unlocked) return; initAudio(); (ac.resume?ac.resume():Promise.resolve()).finally(()=>{
+    try{ const o=ac.createOscillator(), g=ac.createGain(); o.type='sine'; o.frequency.value=440; g.gain.value=0.0001; o.connect(g); g.connect(preGain); o.start(); o.stop(ac.currentTime+0.02);}catch(_){}
+    unlocked=true; ['pointerdown','touchstart','keydown'].forEach(t=>document.removeEventListener(t,unlockOnce,true));
   });
 }
 ['pointerdown','touchstart','keydown'].forEach(t=>document.addEventListener(t,unlockOnce,{capture:true,passive:true}));
 
+function setVolume(v=1000){
+  initAudio();
+  const g = Math.max(0, Math.min(1000, Number(v)));
+  master.gain.value = g/666; // 1000≈1.5, with preamp 4x -> very loud
+  localStorage.setItem('w0l0_volume', String(v));
+}
+(function(){ setVolume(parseInt(localStorage.getItem('w0l0_volume')||'1000',10)); })();
+
 function tick(){
   initAudio(); if(ac.state==='suspended') ac.resume();
   const t=ac.currentTime;
-  // high click
-  { const o=ac.createOscillator(), g=ac.createGain();
-    o.type='square'; o.frequency.setValueAtTime(1600,t);
-    g.gain.setValueAtTime(0,t);
-    g.gain.linearRampToValueAtTime(1.0,t+0.003);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
-    o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.07);
-  }
-  // sub thump
-  { const o=ac.createOscillator(), g=ac.createGain();
-    o.type='sine'; o.frequency.setValueAtTime(160,t);
-    o.frequency.exponentialRampToValueAtTime(110,t+0.09);
-    g.gain.setValueAtTime(0,t);
-    g.gain.linearRampToValueAtTime(1.0,t+0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
-    o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.14);
-  }
+  { const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.setValueAtTime(1600,t);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1.0,t+0.003); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.07); }
+  { const o=ac.createOscillator(), g=ac.createGain(); o.type='sine'; o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(110,t+0.09);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1.0,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+    o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.14); }
 }
 function lineClear(){
-  initAudio(); if(ac.state==='suspended') ac.resume();
-  const t=ac.currentTime;
-  [880,1175,1568].forEach((f,i)=>{
-    const o=ac.createOscillator(), g=ac.createGain(), dt=i*0.05;
+  initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime;
+  [880,1175,1568].forEach((f,i)=>{ const o=ac.createOscillator(), g=ac.createGain(), dt=i*0.05;
     o.type='triangle'; o.frequency.setValueAtTime(f,t+dt);
-    g.gain.setValueAtTime(0,t+dt);
-    g.gain.linearRampToValueAtTime(1.0,t+dt+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.25);
-    o.connect(g); g.connect(preGain); o.start(t+dt); o.stop(t+dt+0.3);
-  });
+    g.gain.setValueAtTime(0,t+dt); g.gain.linearRampToValueAtTime(1.0,t+dt+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.25);
+    o.connect(g); g.connect(preGain); o.start(t+dt); o.stop(t+dt+0.3); });
 }
-// korobeiniki (tetris theme) — eenvoudige synth-loop
-const theme = [
-  [659,0.00,0.18],[494,0.18,0.18],[523,0.36,0.18],[587,0.54,0.18],[523,0.72,0.18],[494,0.90,0.18],[440,1.08,0.36],
-  [440,1.50,0.18],[523,1.68,0.18],[659,1.86,0.36],[587,2.28,0.18],[523,2.46,0.18],[494,2.64,0.18],[523,2.82,0.36]
-];
+// korobeiniki mini-loop
+const theme=[[659,0,0.18],[494,0.18,0.18],[523,0.36,0.18],[587,0.54,0.18],[523,0.72,0.18],[494,0.9,0.18],[440,1.08,0.36],[440,1.5,0.18],[523,1.68,0.18],[659,1.86,0.36],[587,2.28,0.18],[523,2.46,0.18],[494,2.64,0.18],[523,2.82,0.36]];
 let themeHandle=null;
-function playTheme(loop=true, bpm=180){
-  initAudio(); if(ac.state==='suspended') ac.resume();
-  stopTheme();
-  const beat = 60/bpm;
-  const t0 = ac.currentTime + 0.05;
-  theme.forEach(([f,bt,len])=>{
-    const o=ac.createOscillator(), g=ac.createGain();
-    o.type='square'; o.frequency.value=f;
-    const t=t0+bt*beat, d=len*beat;
-    g.gain.setValueAtTime(0,t);
-    g.gain.linearRampToValueAtTime(0.9,t+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+d);
-    o.connect(g); g.connect(preGain);
-    o.start(t); o.stop(t+d+0.05);
-  });
-  if(loop){
-    const total = (Math.max(...theme.map(x=>x[1]+x[2]))+0.1)*beat;
-    themeHandle = setTimeout(()=>playTheme(true,bpm), total*1000);
-  }
-}
+function playTheme(loop=true,bpm=185){ initAudio(); if(ac.state==='suspended') ac.resume(); stopTheme(); const beat=60/bpm, t0=ac.currentTime+0.05;
+  theme.forEach(([f,bt,len])=>{ const o=ac.createOscillator(), g=ac.createGain(), t=t0+bt*beat, d=len*beat;
+    o.type='square'; o.frequency.value=f; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.9,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(g); g.connect(preGain); o.start(t); o.stop(t+d+0.05); });
+  if(loop){ const total=(Math.max(...theme.map(x=>x[1]+x[2]))+0.1)*beat; themeHandle=setTimeout(()=>playTheme(true,bpm), total*1000); } }
 function stopTheme(){ if(themeHandle){ clearTimeout(themeHandle); themeHandle=null; } }
-function setVolume(v=1000){
-  initAudio();
-  // map 0..1000 naar ~0..1.5 (plus preamp=4x → heel luid)
-  const g = Math.max(0, Math.min(1000, Number(v)));
-  const linear = g/666; // 1000 ≈ 1.5
-  master.gain.value = linear;
-  localStorage.setItem('w0l0_volume', String(v));
-}
-(function(){ const v = parseInt(localStorage.getItem('w0l0_volume')||'1000',10); setVolume(v); })();
 
-/* ---------- tetris viewport (simplified fall demo) ---------- */
-const W=40, H=400;
-const cells = document.getElementById('cells');
-const fall  = document.getElementById('fall');
-const linesEl = document.getElementById('lines');
-const spdEl   = document.getElementById('spd');
-(function buildGrid(){ const n=W*H; const f=document.createDocumentFragment(); for(let i=0;i<n;i++){ f.appendChild(document.createElement('div')); } cells.appendChild(f); })();
-
-let speed = 1, lines = 0, running=true;
+/* ===== tetris viewport (40x400 fall demo) ===== */
+const W=40,H=400,cells=document.getElementById('cells'),fall=document.getElementById('fall'),
+      linesEl=document.getElementById('lines'),spdEl=document.getElementById('spd');
+(function buildGrid(){ const n=W*H,f=document.createDocumentFragment(); for(let i=0;i<n;i++) f.appendChild(document.createElement('div')); cells.appendChild(f); })();
+let speed=1,lines=0,running=true;
 function spawnBlock(){
-  const b = document.createElement('div'); b.className='blk';
-  const x = Math.floor(Math.random()*W);
-  b.style.left = (x*100/W)+'%'; b.style.top='0%';
-  fall.appendChild(b);
-  let y=0, vy=0.25*speed; // top → bottom
-  const step = ()=>{
-    if(!running) return;
-    y += vy;
-    b.style.top = (y*100/H)+'%';
-    if(y>=H-1){ // land
-      lines += 1; linesEl.textContent = String(lines);
-      lineClear(); b.remove();
-      spawnBlock();
-      return;
-    }
+  const b=document.createElement('div'); b.className='blk';
+  const x=Math.floor(Math.random()*W); b.style.left=(x*100/W)+'%'; b.style.top='0%'; fall.appendChild(b);
+  let y=0,vy=0.25*speed;
+  const step=()=>{ if(!running) return; y+=vy; b.style.top=(y*100/H)+'%';
+    if(y>=H-1){ lines+=1; linesEl.textContent=String(lines); lineClear(); b.remove(); spawnBlock(); return; }
     requestAnimationFrame(step);
   };
-  tick(); // sound per spawn
-  requestAnimationFrame(step);
+  tick(); requestAnimationFrame(step);
 }
-function resetView(){
-  lines=0; linesEl.textContent='0';
-  fall.querySelectorAll('.blk').forEach(n=>n.remove());
-  spawnBlock();
-}
+function resetView(){ lines=0; linesEl.textContent='0'; fall.querySelectorAll('.blk').forEach(n=>n.remove()); spawnBlock(); }
 
-document.getElementById('reset').addEventListener('click', (e)=>{ e.preventDefault(); resetView(); });
-document.getElementById('stop').addEventListener('click', (e)=>{ e.preventDefault(); running=false; stopTheme(); try{ ac && ac.close(); }catch(_){ } });
+document.getElementById('reset').addEventListener('click',e=>{e.preventDefault(); resetView();});
+document.getElementById('stop').addEventListener('click',e=>{e.preventDefault(); running=false; stopTheme(); try{ ac && ac.close(); }catch(_){ }});
+document.getElementById('vol').addEventListener('input',e=>setVolume(e.target.value));
 
-document.getElementById('vol').addEventListener('input', (e)=>{ setVolume(e.target.value); });
-
-// start
-playTheme(true, 185); // voelt lekker snel
+// start — alles boven de fold
+playTheme(true,185);
 resetView();
 </script>
 </body>
