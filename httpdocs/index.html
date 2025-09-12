@@ -1,27 +1,80 @@
 <!doctype html>
 <html lang='nl'>
 <meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>the101game · w0l0</title>
+<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no'>
+<meta name='theme-color' content='#000000'>
+<link rel='manifest' href='/manifest.webmanifest'>
+<title>the101game · webapp</title>
 <style>
-  html,body{margin:0;height:100%;background:#000;color:#eaeaea;font:16px/1.5 ui-monospace,consolas,monospace}
-  main{min-height:100%;display:grid;place-items:center;padding:4vh 4vw}
-  .card{width:min(720px,92vw);border:1px solid #333;border-radius:8px;padding:20px}
-  .line{white-space:pre-wrap;margin:.35rem 0}
-  .hint{opacity:.6;font-size:.9rem;margin-top:1rem}
+  :root{
+    --bg:#000; --fg:#eaeaea; --muted:#8a8a8a; --line:#222; --accent:#ffd400;
+    --pad: clamp(12px, 3vmin, 20px);
+    --fs: clamp(14px, 2.2vmax, 22px);
+    --fs-large: clamp(18px, 3.2vmax, 28px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:var(--fs)/1.5 ui-monospace,consolas,monospace}
+  body{min-height:100dvh;display:flex;flex-direction:column}
+  .safe{padding:calc(env(safe-area-inset-top) + var(--pad)) calc(env(safe-area-inset-right) + var(--pad))
+                calc(env(safe-area-inset-bottom) + var(--pad)) calc(env(safe-area-inset-left) + var(--pad))}
+  header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid var(--line)}
+  header .brand{font-weight:600;letter-spacing:.5px}
+  header .dot{width:.6rem;height:.6rem;border-radius:50%;background:var(--accent);display:inline-block;margin-left:.5rem}
+  main{flex:1;display:flex;flex-direction:column;gap:10px}
+  .block{padding:10px 0;border-bottom:1px dashed var(--line)}
+  .block:last-child{border-bottom:none}
+  .label{opacity:.6}
+  .value{font-size:var(--fs-large);white-space:pre-wrap}
+  /* tetris placeholder area (optional, hidden for now) */
+  #tetris{display:none; width:100%; border:1px dashed var(--line); margin-top:8px; aspect-ratio:1/10;
+          position:relative; overflow:auto}
+  #tgrid{position:absolute; inset:0; display:grid; grid-template-columns:repeat(40,1fr); grid-template-rows:repeat(400,1fr)}
+  #tgrid div{outline:1px solid #111; background:transparent}
+  footer{opacity:.7;font-size:.9em;margin-top:auto}
+  .hint{color:var(--muted)}
 </style>
-<body>
-<main>
-  <section class='card' id='id'>
-    <div class='line' data-key='side'>i am right</div>
-    <div class='line' data-key='case'>i am lowercase</div>
-    <div class='line' data-key='name'>i am bert</div>
-    <div class='line' data-key='ernie'>ernie is not here</div>
-    <div class='line' data-key='left'>he is left</div>
-    <div class='line' data-key='noise'>a screamer</div>
-    <div class='hint'>edit live in console: set('name','i am bert v2')</div>
-  </section>
-</main>
+<body class='safe'>
+  <header>
+    <div class='brand'>the101game<span class='dot' aria-hidden='true'></span></div>
+    <div class='hint'>mobile · webapp · pwa</div>
+  </header>
+
+  <main id='screen' aria-label='app screen'>
+    <section class='block'>
+      <div class='label'>side</div>
+      <div class='value' data-key='side'>i am right</div>
+    </section>
+    <section class='block'>
+      <div class='label'>case</div>
+      <div class='value' data-key='case'>i am lowercase</div>
+    </section>
+    <section class='block'>
+      <div class='label'>name</div>
+      <div class='value' data-key='name'>i am bert</div>
+    </section>
+    <section class='block'>
+      <div class='label'>ernie</div>
+      <div class='value' data-key='ernie'>ernie is not here</div>
+    </section>
+    <section class='block'>
+      <div class='label'>left</div>
+      <div class='value' data-key='left'>he is left</div>
+    </section>
+    <section class='block'>
+      <div class='label'>note</div>
+      <div class='value' data-key='note'>this is a webapp. mobile is default.</div>
+    </section>
+
+    <!-- optional tetris viewport (40x400). enable by removing display:none on #tetris -->
+    <section class='block' id='tetris' aria-label='tetris 40x400'>
+      <div id='tgrid'></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class='hint'>console: set('name','i am bert, lowercase forever')</div>
+  </footer>
+
 <script>
   const key='w0l0_identity';
   function apply(){
@@ -33,10 +86,18 @@
   }
   window.set=function(k,v){
     const m=JSON.parse(localStorage.getItem(key)||'{}');
-    m[k]=v; localStorage.setItem(key,JSON.stringify(m));
-    apply(); return 'ok';
+    m[k]=v; localStorage.setItem(key,JSON.stringify(m)); apply(); return 'ok';
   }
-  window.reset=function(){ localStorage.removeItem(key); apply(); return 'cleared'; }
+  window.slot=function(k,v){ return window.set(k,v) }
+  // optional tetris grid build (kept off by default)
+  ;(function(){
+    const g=document.getElementById('tgrid'); if(!g) return;
+    const n=40*400; const f=document.createDocumentFragment();
+    for(let i=0;i<n;i++){ f.appendChild(document.createElement('div')) }
+    g.appendChild(f);
+  })();
+  // pwa install
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}) }
   apply();
 </script>
 </body>
