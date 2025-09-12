@@ -3,6 +3,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>w0l0 · mama + seconds</title>
+<style>/* phone frame css */
+:root{ --phone-w: min(100vw, 420px); --bg:#000; --fg:#eaeaea }
+html,body{background:var(--bg);color:var(--fg)}
+/* container die op desktop centreert en op mobiel fullscreen is */
+#phone{ width:var(--phone-w); min-height:100dvh; margin:0 auto; position:relative }
+@supports (height: 100dvh){ #phone{ min-height:100dvh } }
+/* fixed elementen binnen het frame begrenzen */
+#phone .fit-x{ left:0; right:0; }
+@media (min-width:600px){
+  body{ display:grid; place-items:start center; }
+}
+/* zorg dat bars die 'fixed' zijn niet meer de volle breedte pakken */
+.bar{ inset:auto auto auto auto; width:100%; max-width:var(--phone-w); margin:0 auto }
+</style>
 <style>
   :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:68px;--pad:10px}
   *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
@@ -30,7 +44,7 @@
   #autoplay-gate .card b{display:block;margin-bottom:6px}
   #autoplay-gate .tip{opacity:.8;font-size:.9em}
 </style>
-<body>
+<body><div id="phone">
   <div class="bar">
     <div class="left">
       <div class="msg" id="mama">...</div>
@@ -183,5 +197,6 @@ document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=f
 document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue');};
 document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
 </script>
-</body>
+</div></body>
 </html>
+

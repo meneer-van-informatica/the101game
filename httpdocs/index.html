@@ -8,6 +8,20 @@
 <meta name='app-version' content='20250912141740'>
 <link rel='manifest' href='/manifest.webmanifest'>
 <title>the101game · webapp</title>
+<style>/* phone frame css */
+:root{ --phone-w: min(100vw, 420px); --bg:#000; --fg:#eaeaea }
+html,body{background:var(--bg);color:var(--fg)}
+/* container die op desktop centreert en op mobiel fullscreen is */
+#phone{ width:var(--phone-w); min-height:100dvh; margin:0 auto; position:relative }
+@supports (height: 100dvh){ #phone{ min-height:100dvh } }
+/* fixed elementen binnen het frame begrenzen */
+#phone .fit-x{ left:0; right:0; }
+@media (min-width:600px){
+  body{ display:grid; place-items:start center; }
+}
+/* zorg dat bars die 'fixed' zijn niet meer de volle breedte pakken */
+.bar{ inset:auto auto auto auto; width:100%; max-width:var(--phone-w); margin:0 auto }
+</style>
 <link rel='stylesheet' href='/stippy/stippy.css'>
 <style>
   :root{--bg:#000;--fg:#eaeaea;--muted:#8a8a8a;--line:#222;--accent:#ffd400;--pad:clamp(8px,2.5vmin,16px);--fs:clamp(14px,2.2vmax,22px);--fs-lg:clamp(18px,3.2vmax,28px)}
@@ -31,7 +45,7 @@
   header .icon{background:none;border:0;padding:0;margin-left:.75rem}
   header .icon svg{display:block;width:1.2rem;height:1.2rem}
 </style>
-<body class='safe'>
+<body class='safe'><div id="phone">
   <header>
     <div class='brand'>the101game<span class='dot' aria-hidden='true'></span></div>
     <div class='hint'>mobile · webapp · pwa</div>
@@ -199,8 +213,9 @@
   })();
 })();
 </script>
-</body>
+</div></body>
 </html>
+
 
 
 
