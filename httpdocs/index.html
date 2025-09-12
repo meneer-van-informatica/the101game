@@ -85,8 +85,123 @@
   }
 })();
 </script>
+<script>
+/* index bg-audio + tap nav */
+(function(){
+  // ---------- audio core ----------
+  let ac, preGain, comp, master;
+  function initAudio(){ if(ac) return;
+    ac=new (window.AudioContext||window.webkitAudioContext)();
+    preGain=ac.createGain(); preGain.gain.value=4.0;
+    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+    master=ac.createGain(); master.gain.value=0.0; // stil op index
+    preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
+  }
+  async function ensureAudio(){ try{ initAudio(); if(ac.state==='suspended') await ac.resume(); }catch(_){} }
+  function setVol01(v){ if(!master) return; master.gain.value=Math.max(0,Math.min(1.5,v)); }
+
+  // ---------- tone helpers ----------
+  const W=40,H=400; const FALL_SLOW=3000, FALL_FAST=900, SPAWN_MS=5000;
+  function freqForX(x){ const f0=261.63, span=24, semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
+  function currentFallMs(){ const s=(new Date()).getSeconds(); const a=s/59; return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a; }
+  function tickSound(x,y){
+    try{ initAudio(); }catch(_){}
+    if(!ac) return;
+    const t=ac.currentTime, f=freqForX(x||0)*(0.85+0.3*((y||0)/H));
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type='square'; o.frequency.setValueAtTime(f,t);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
+    o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.08);
+  }
+  function chord(x){
+    try{ initAudio(); }catch(_){}
+    if(!ac) return;
+    const root=freqForX(x), t0=ac.currentTime+0.02;
+    [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
+      g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
+      o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4); });
+  }
+
+  // ---------- bg fall loop (sound only, seconds-driven) ----------
+  (function runBg(){
+    // probeer stil te starten; als intent gezet is door taalmodal is dit meestal direct toegestaan
+    ensureAudio().then(()=>setVol01(0.0));
+    // seeded maar simpel
+    let x = Math.floor(Math.random()*W);
+    let blockStart = performance.now();
+    chord(x);
+    function loop(now){
+      const fm = currentFallMs();
+      const tIn = (now - blockStart);
+      const y   = Math.max(0, Math.min(H, (tIn/fm)*H));
+      // tik elke 12 rijen
+      const step=12; const phase=Math.floor(y/step);
+      if(loop._p !== phase){ loop._p = phase; tickSound(x,y); }
+      // nieuw blok
+      if (tIn >= SPAWN_MS){
+        blockStart = now;
+        x = Math.floor(Math.random()*W);
+        chord(x);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  })();
+
+  // ---------- tap = tik + 10 taps -> /w0l0.html ----------
+  let tapCount = 0, tapTimer=null;
+  function tap(){
+    tapCount++;
+    // tik-sound op tap
+    ensureAudio().then(()=>{ setVol01(Math.max(0.15, master?.gain?.value||0)); tickSound(0,0); });
+    // reset window
+    clearTimeout(tapTimer); tapTimer=setTimeout(()=>{ tapCount=0; }, 6000);
+    if (tapCount >= 10){
+      tapCount = 0;
+      // bepaal taal/bericht
+      const L = localStorage.getItem('site_lang') || 'en';
+      if (L === 'nl'){
+        localStorage.setItem('w_msg_text','hallo mama');
+        localStorage.setItem('w_msg_case','1');
+      } else {
+        localStorage.setItem('w_msg_text','HELLO MAMA');
+        localStorage.setItem('w_msg_case','0');
+      }
+      // laat w0l0 weten dat audio gewoon door mag
+      localStorage.setItem('w_audio_continue','1');
+      localStorage.setItem('w_audio_intent_ts', String(Date.now()));
+      location.assign('/w0l0.html');
+    }
+  }
+  window.addEventListener('pointerdown', tap, {passive:true});
+
+  // ---------- koppel taalmodal-knoppen ook aan audio intent ----------
+  (function bindIntent(){
+    function unlockAudioIntent(){
+      try{
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC){
+          const a = new AC(), g=a.createGain(); g.gain.value=0.0001;
+          const o=a.createOscillator(); o.type='sine'; o.frequency.value=440;
+          o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+0.01);
+          a.resume?.(); setTimeout(()=>{ try{ a.close(); }catch(_){ } }, 30);
+        }
+      }catch(_){}
+      localStorage.setItem('w_audio_intent','1');
+      localStorage.setItem('w_audio_intent_ts', String(Date.now()));
+    }
+    function bind(){
+      document.getElementById('btn-en')?.addEventListener('click', unlockAudioIntent);
+      document.getElementById('btn-nl')?.addEventListener('click', unlockAudioIntent);
+    }
+    if (document.readyState==='complete'||document.readyState==='interactive') bind();
+    else document.addEventListener('DOMContentLoaded', bind, {once:true});
+  })();
+})();
+</script>
 </body>
 </html>
+
 
 
 

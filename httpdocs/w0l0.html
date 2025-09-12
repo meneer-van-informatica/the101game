@@ -2,18 +2,20 @@
 <html lang="nl">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l0 · seconds drive the fall</title>
+<title>w0l0 · mama + seconds</title>
 <style>
-  :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:54px;--pad:10px}
+  :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:68px;--pad:10px}
   *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
   .bar{position:fixed;top:0;left:0;right:0;min-height:var(--hbar);
        padding:calc(env(safe-area-inset-top) + 0px) var(--pad) 6px var(--pad);
-       display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);
+       display:grid;grid-template-columns:1fr auto;gap:10px;border-bottom:1px solid var(--line);
        background:#000000e6;backdrop-filter:blur(2px);z-index:10}
+  .left{min-width:0}
+  .right{display:flex;align-items:center;gap:10px}
   .btn{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
-  .meter{margin-left:auto;display:flex;align-items:center;gap:8px}
-  .meter input{width:120px}
+  .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #clock{opacity:.9}
+  .meter input{width:120px}
   #wrap{position:fixed;left:0;right:0;top:calc(var(--hbar) + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);padding:6px var(--pad)}
   #view{position:relative;width:100%;height:100%;border:1px dashed #444;overflow:hidden;
         background-image:
@@ -30,11 +32,17 @@
 </style>
 <body>
   <div class="bar">
-    <a class="btn" href="/">← home</a>
-    <button id="stop"  class="btn">stop</button>
-    <button id="reset" class="btn">reset</button>
-    <span id="clock">-- -- ---- --:--:--</span>
-    <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
+    <div class="left">
+      <div class="msg" id="mama">...</div>
+      <div class="msg" id="line2">...</div>
+    </div>
+    <div class="right">
+      <span id="clock">-- -- ---- --:--:--</span>
+      <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
+      <a class="btn" href="/">home</a>
+      <button id="reset" class="btn">reset</button>
+      <button id="stop"  class="btn">stop</button>
+    </div>
   </div>
 
   <div id="wrap">
@@ -43,7 +51,6 @@
     </section>
   </div>
 
-  <!-- autoplay gate overlay -->
   <div id="autoplay-gate" role="dialog" aria-modal="true">
     <div class="card">
       <b>tap to start sound</b>
@@ -52,156 +59,129 @@
   </div>
 
 <script>
-/* ---------- lang sync ---------- */
+/* lang sync */
 (function(){var L=localStorage.getItem('site_lang')||'en';document.documentElement.setAttribute('lang',L);})();
 
-/* ---------- clock dd mmmm yyyy HH:MM:SS ---------- */
+/* clock dd mmmm yyyy HH:MM:SS */
 (function(){
   const el=document.getElementById('clock');
   function pad(n){return String(n).padStart(2,'0')}
-  function fmt(d){
+  function fmt(d,lang){
     const dd=pad(d.getDate());
-    const month=d.toLocaleString('nl-NL',{month:'long'});
+    const month=d.toLocaleString(lang||'nl-NL',{month:'long'});
     const yyyy=d.getFullYear();
     const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
     return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
   }
-  function tick(){ const now=new Date(); el.textContent=fmt(now); requestAnimationFrame(()=>{}); }
+  function tick(){ const L=localStorage.getItem('site_lang')||'en'; const now=new Date(); el.textContent=fmt(now, L==='en'?'en-US':'nl-NL'); }
   setInterval(tick, 250); tick();
 })();
 
-/* ---------- audio core (very loud chain) ---------- */
-let ac, comp, preGain, master, unlocked=false;
+/* mama line + case */
+(function(){
+  const L = localStorage.getItem('site_lang') || 'en';
+  let msg = localStorage.getItem('w_msg_text') || (L==='nl'?'hallo mama':'HELLO MAMA');
+  let kase = (L==='nl'?'1':'0');
+  // format date
+  function fmtDate(L){
+    const d=new Date();
+    const dd=String(d.getDate()).padStart(2,'0');
+    const month=d.toLocaleString(L==='en'?'en-US':'nl-NL',{month:'long'});
+    const yyyy=d.getFullYear();
+    const HH=String(d.getHours()).padStart(2,'0');
+    const MM=String(d.getMinutes()).padStart(2,'0');
+    const SS=String(d.getSeconds()).padStart(2,'0');
+    return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
+  }
+  function render(){
+    const mEl=document.getElementById('mama');
+    const l2=document.getElementById('line2');
+    const L = localStorage.getItem('site_lang') || 'en';
+    const date = fmtDate(L);
+    if (L==='en'){
+      mEl.textContent = 'HELLO MAMA.';
+      l2.textContent  = ('THE CLOCK SAYS ' + date).toUpperCase() + ' · CASE: 0';
+    } else {
+      mEl.textContent = 'hallo mama.';
+      l2.textContent  = ('de klok zegt ' + date).toLowerCase() + ' · case: 1';
+    }
+  }
+  setInterval(render, 250); render();
+})();
+
+/* audio core */
+let ac, comp, preGain, master;
 function initAudio(){ if(ac) return;
   ac=new (window.AudioContext||window.webkitAudioContext)();
   preGain=ac.createGain(); preGain.gain.value=4.0;
   comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-  master=ac.createGain(); master.gain.value=0.0; // start stil (we rampen op eerste blok)
+  master=ac.createGain(); master.gain.value=0.0; // start stil (ramp on first fall)
   preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
 }
 function setVolume(v=0){ initAudio(); const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; const el=document.getElementById('vol'); if(el) el.value=String(n); localStorage.setItem('w_audio_vol', String(n)); }
 
-/* autoplay gate + index intent */
+/* gate + intent */
 (function(){
   const gate=document.getElementById('autoplay-gate');
   function showGate(){ gate && gate.classList.add('show') }
   function hideGate(){ gate && gate.classList.remove('show') }
-  async function tryStartSilently(){
-    try{ initAudio(); setVolume(0); }catch(_){}
+  async function tryStartSilently(){ try{ initAudio(); setVolume(0); }catch(_){}
     try{ if(ac && ac.state==='suspended') await ac.resume(); }catch(_){}
-    if(ac && ac.state==='running'){ hideGate(); return true }
-    showGate(); return false
-  }
-  function userUnlock(){
-    try{ initAudio(); ac && ac.resume && ac.resume(); }catch(_){}
-    hideGate();
-    window.removeEventListener('pointerdown', userUnlock, true);
-    window.removeEventListener('keydown', userUnlock, true);
-    gate && gate.removeEventListener('click', userUnlock);
-  }
+    if(ac && ac.state==='running'){ hideGate(); return true } showGate(); return false }
+  function userUnlock(){ try{ initAudio(); ac && ac.resume && ac.resume(); }catch(_){}
+    hideGate(); window.removeEventListener('pointerdown', userUnlock, true); window.removeEventListener('keydown', userUnlock, true); gate && gate.removeEventListener('click', userUnlock); }
   window.addEventListener('pointerdown', userUnlock, true);
   window.addEventListener('keydown', userUnlock, true);
   gate && gate.addEventListener('click', userUnlock, {passive:true});
-
-  // prefer intent from index (within 8s)
   function intentFresh(){ try{ const ts=parseInt(localStorage.getItem('w_audio_intent_ts')||'0',10); return ts && (Date.now()-ts)<8000 }catch(_){ return false } }
   function tryFromIntent(){ if(!intentFresh()) return; try{ initAudio(); ac && ac.resume && ac.resume(); setVolume(0); }catch(_){} hideGate(); }
-
   if (document.readyState==='complete'||document.readyState==='interactive'){ tryFromIntent(); tryStartSilently(); }
   else document.addEventListener('DOMContentLoaded', ()=>{ tryFromIntent(); tryStartSilently(); }, {once:true});
 })();
 
-/* ---------- shared math ---------- */
-const W=40,H=400, SPAWN_MS=5000;
-function colorForX(x){ const h=120*(x/(W-1)); return `hsl(${h} 90% 50% / .65)`; }
+/* seconds-driven fall visuals + sound */
+const W=40,H=400, SPAWN_MS=5000, FALL_SLOW=3000, FALL_FAST=900;
 function freqForX(x){ const f0=261.63, span=24, semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
-
-/* seconds-driven fall time: 00 -> slow, 59 -> fast */
-const FALL_SLOW=3000, FALL_FAST=900; // ms
-function currentFallMs(){
-  const s=(new Date()).getSeconds(); // 0..59
-  const a=s/59; // 0..1
-  return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a;
+function currentFallMs(){ const s=(new Date()).getSeconds(); const a=s/59; return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a; }
+const view=document.getElementById('view');
+function chord(x){ initAudio(); if(ac.state==='suspended') ac.resume(); const root=freqForX(x), t0=ac.currentTime+0.02;
+  [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
+    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
+    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4); });
 }
-
-/* ticks + chord */
-function fallTick(x,y){
-  initAudio(); if(ac.state==='suspended') ac.resume();
-  const t=ac.currentTime, f=freqForX(x)*(0.85+0.3*(y/H));
-  const o=ac.createOscillator(), g=ac.createGain();
-  o.type='square'; o.frequency.setValueAtTime(f,t);
+function tickSound(x,y){ initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime, f=freqForX(x)*(0.85+0.3*((y||0)/H));
+  const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.setValueAtTime(f,t);
   g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
   o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.08);
 }
-function playChordForX(x){
-  initAudio(); if(ac.state==='suspended') ac.resume();
-  const root=freqForX(x), t0=ac.currentTime+0.02;
-  [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
-    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
-    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4);
-  });
-}
-
-/* ---------- fall engine (delta-time; speed follows SS live) ---------- */
-const view=document.getElementById('view');
 let firstLanded=false;
-
 function spawnAndDrop(){
   const x=Math.floor(Math.random()*W);
   const blk=document.createElement('div'); blk.className='blk';
-  blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=colorForX(x);
-  blk.style.outlineColor='rgba(0,0,0,.55)';
-  view.appendChild(blk);
-
-  playChordForX(x);
-
-  let y=0;             // in grid rows (0..H)
-  let last=performance.now();
-  let lastTickRow=-1;
-
+  blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=`hsl(${120*(x/(W-1))} 90% 50% / .65)`; view.appendChild(blk);
+  chord(x);
+  let y=0, last=performance.now(), lastTick=-1;
   function step(now){
     const dt = now - last; last = now;
-    const fm = currentFallMs();                 // ms for full height at this moment (seconds-driven)
-    const vy = H / fm;                          // rows per ms
-    y += vy * dt;                               // integrate with delta-time
-
-    // volume ramp on first block
-    if(!firstLanded){
-      const p = Math.max(0, Math.min(1, y/H));
-      setVolume(Math.round(p*100));
-    }
-
-    // ticks every 12 rows
-    const phase = Math.floor(y/12);
-    if(phase>lastTickRow){ lastTickRow=phase; fallTick(x,y); }
-
+    const fm = currentFallMs();
+    const vy = H / fm; y += vy * dt;
+    if(!firstLanded){ const p=Math.max(0,Math.min(1,y/H)); setVolume(Math.round(p*100)); }
+    const phase=Math.floor(y/12); if(phase>lastTick){ lastTick=phase; tickSound(x,y); }
     blk.style.top=(Math.min(y,H-1)*100/H)+'%';
-
     if(y>=H-1){
-      if(!firstLanded){
-        firstLanded=true;
-        setVolume(100);
-        localStorage.setItem('w_audio_continue','1');
-        // ga door naar w0l1 (visual), audio blijft spelen volgens dezelfde math daar
-        setTimeout(()=>location.assign('/w0l1.html'), 200);
-      }
+      if(!firstLanded){ firstLanded=true; setVolume(100); localStorage.setItem('w_audio_continue','1'); }
       blk.remove(); return;
     }
     requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
+setVolume(0); spawnAndDrop(); const spawner=setInterval(()=>{ if(!firstLanded) spawnAndDrop(); else clearInterval(spawner); }, 5000);
 
-/* ---------- controls ---------- */
+/* controls */
 document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=false; setVolume(0); view.querySelectorAll('.blk').forEach(n=>n.remove()); spawnAndDrop();};
 document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue');};
 document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
-
-// start
-setVolume(0);
-spawnAndDrop();
-// extra spawns elke 5s (je voelt het tempo per minuut veranderen)
-const spawner=setInterval(()=>{ if(!firstLanded) spawnAndDrop(); else clearInterval(spawner); }, 5000);
 </script>
 </body>
 </html>
