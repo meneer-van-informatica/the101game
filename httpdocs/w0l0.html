@@ -38,7 +38,8 @@
       <a class="btn" href="/">home</a>
     </div>
   </div>
-  <div id="wrap">
+  <div id='field'><div id='stack'></div></div>
+<div id="wrap">
     <section id="view" aria-label="tetris 40x400">
       <div id="legend" aria-hidden="true"></div>
     </section>
@@ -252,7 +253,78 @@ document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
   else document.addEventListener('DOMContentLoaded', run, {once:true});
 })();
 </script>
+<script>
+/* field stack layout */
+(function(){
+  function parseKey(k){
+    // 'laag.x.y' -> {l,x,y}
+    const m = String(k||'').split('.').map(n=>parseInt(n,10));
+    return { l: m[0]||0, x: m[1]||0, y: m[2]||0 };
+  }
+  function colorByLang(){
+    const L = localStorage.getItem('site_lang')||'en';
+    return (L==='en') ? 'green' : 'red';
+  }
+  function decorate(el){
+    // voeg meta voor label toe
+    const {l,x,y} = parseKey(el.dataset.b||'0.0.0');
+    const meta = x= · y= · kleur=;
+    el.dataset.meta = meta;
+    // zet randkleur per taal
+    el.style.borderColor = (colorByLang()==='green') ? '#2ee670' : '#e62e2e';
+  }
+  function measureTotalHeight(list){
+    // som van hoogte + gaps (8px)
+    let h = 0;
+    list.forEach(el => { h += el.getBoundingClientRect().height; });
+    h += Math.max(0, list.length-1) * 8;
+    // plus boven labelruimte ~10px
+    return h + 10;
+  }
+  function layout(){
+    const stack = document.getElementById('stack');
+    if(!stack) return;
+
+    // pak alle blok-wrappers die we eerder hebben gemaakt
+    const nodes = Array.from(document.querySelectorAll('.blk'))
+      // sluit het field/stack zelf uit als daar ook .blk in zou komen (defensief)
+      .filter(n => n.id !== 'stack' && n.id !== 'field');
+
+    // sorteer: laag, x, y
+    nodes.sort((a,b)=>{
+      const A = parseKey(a.dataset.b||'0.0.0');
+      const B = parseKey(b.dataset.b||'0.0.0');
+      return (A.l-B.l) || (A.x-B.x) || (A.y-B.y);
+    });
+
+    // label + kleur
+    nodes.forEach(decorate);
+
+    // zet alles in #stack (midden, onder elkaar)
+    nodes.forEach(n => stack.appendChild(n));
+
+    // schaal zodat het niet over de onderkant gaat
+    const field = document.getElementById('field');
+    const avail = field.getBoundingClientRect().height;
+    // tijdelijk schaal 1 om echte hoogte te meten
+    stack.style.transform = 'scale(1)';
+    const need = measureTotalHeight(nodes);
+    const scale = Math.min(1, (avail-4) / Math.max(need,1));
+    stack.style.transform = scale();
+  }
+
+  function go(){ layout(); }
+  if (document.readyState==='complete' || document.readyState==='interactive') go();
+  else document.addEventListener('DOMContentLoaded', go, {once:true});
+
+  // herlayout bij oriëntatie/resize en bij taalwissel (kleur)
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', layout);
+  window.addEventListener('storage', (e)=>{ if(e.key==='site_lang') layout(); });
+})();
+</script>
 </body>
 </html>
+
 
 
