@@ -1,4 +1,5 @@
 ﻿<!doctype html>
+<!-- BUILD VERSION 2 -->
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
@@ -323,8 +324,10 @@ document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
   window.addEventListener('storage', (e)=>{ if(e.key==='site_lang') layout(); });
 })();
 </script>
+<script>window.APP_BUILD=2; try{localStorage.setItem('app_build','2')}catch(_){}</script>
 </body>
 </html>
+
 
 
 
