@@ -1,0 +1,18 @@
+:root{--stippy-accent:#e02424;--stippy-bg:#111827;--stippy-fg:#f9fafb;--stippy-shadow:0 12px 30px rgba(0,0,0,.35);--stippy-z:9999}
+#stippy-beacon{position:fixed;right:18px;bottom:18px;z-index:var(--stippy-z);width:52px;height:52px;border-radius:50%;border:none;outline:none;background:var(--stippy-accent);color:#fff;font-size:24px;line-height:52px;box-shadow:var(--stippy-shadow);cursor:pointer}
+#stippy-beacon .dot{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#ff4d4d;box-shadow:0 0 0 4px rgba(224,36,36,.2);animation:stippy-pulse 2s infinite}
+@keyframes stippy-pulse{0%{transform:scale(1);opacity:.9}70%{transform:scale(1.6);opacity:0}100%{transform:scale(1);opacity:.9}}
+.stippy-overlay{position:fixed;inset:0;z-index:calc(var(--stippy-z) - 1);background:rgba(17,24,39,.45);display:none}
+.stippy-card{position:absolute;max-width:340px;background:var(--stippy-bg);color:var(--stippy-fg);border-radius:12px;padding:14px 16px;box-shadow:var(--stippy-shadow);border:1px solid rgba(255,255,255,.08);display:block}
+.stippy-card h3{margin:0 0 6px 0;font-size:16px;letter-spacing:.2px;display:flex;gap:.5rem;align-items:center}
+.stippy-card p{margin:0 0 10px 0;font-size:14px;line-height:1.35}
+.stippy-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.stippy-btn{background:transparent;color:var(--stippy-fg);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+.stippy-btn.primary{background:var(--stippy-accent);border-color:var(--stippy-accent)}
+.stippy-card::after{content:"";position:absolute;width:10px;height:10px;background:var(--stippy-bg);transform:rotate(45deg)}
+.stippy-card[data-placement="top"]::after{bottom:-5px;left:20px;border-left:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08)}
+.stippy-card[data-placement="right"]::after{left:-5px;top:20px;border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.08)}
+.stippy-card[data-placement="bottom"]::after{top:-5px;left:20px;border-top:1px solid rgba(255,255,255,.08);border-right:1px solid rgba(255,255,255,.08)}
+.stippy-card[data-placement="left"]::after{right:-5px;top:20px;border-bottom:1px solid rgba(255,255,255,.08);border-right:1px solid rgba(255,255,255,.08)}
+.stippy-ring{position:absolute;pointer-events:none;border:2px solid var(--stippy-accent);box-shadow:0 0 0 6px rgba(224,36,36,.2);border-radius:12px;z-index:var(--stippy-z)}
+@media (prefers-reduced-motion:reduce){#stippy-beacon .dot{animation:none}}
