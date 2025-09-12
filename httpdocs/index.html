@@ -5,127 +5,95 @@
 <title>index · wireframe</title>
 <style>
   :root{ --w:min(100vw,420px); --bg:#000; --fg:#fff; --line:#fff }
-  *{ box-sizing:border-box }
-  html,body{ margin:0; background:#000; color:#fff; font:16px/1.35 ui-monospace,consolas,monospace }
-  #phone{ width:var(--w); min-height:100dvh; margin:0 auto; display:flex; flex-direction:column; padding:12px; }
-  header{ padding:4px 0 12px 0; display:flex; justify-content:center; }
-  #clock{ padding:6px 10px; border:1px solid var(--line); border-radius:8px; min-width:60%; text-align:center }
-
-  main{ flex:1; display:grid; align-content:start; gap:14px; margin-top:18px }
-  .btn{ display:block; width:100%; padding:16px 14px; border:1px solid var(--line); border-radius:12px; background:#000; color:#fff; text-align:center }
-  .btn.white{ background:#000; color:#fff; } /* label says “white ⟷ lower” – shape stays B/W */
-
-  .rule{ height:0; border-top:1px dashed var(--line); opacity:.7; margin:8px 0 2px 0 }
-
-  footer{ padding:20px 0 calc(env(safe-area-inset-bottom) + 10px) 0; display:grid; place-items:center }
-  .dots{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:center }
-  .dot{ width:64px; height:64px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center }
-  .dot.black{ background:#000; color:#fff }
-  .dot.white{ background:#fff; color:#000 }
-  .cap{ font-weight:700; letter-spacing:.4px }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#000;color:#fff;font:16px/1.35 ui-monospace,consolas,monospace}
+  #phone{width:var(--w);min-height:100dvh;margin:0 auto;display:flex;flex-direction:column;padding:12px}
+  header{padding:4px 0 12px 0;display:flex;justify-content:center}
+  #clock{padding:6px 10px;border:1px solid var(--line);border-radius:8px;min-width:60%;text-align:center}
+  main{flex:1;display:grid;align-content:start;gap:14px;margin-top:18px}
+  footer{padding:20px 0 calc(env(safe-area-inset-bottom) + 10px) 0;display:grid;gap:12px;place-items:center}
+  /* dots */
+  .dots{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+  .dot{width:64px;height:64px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center}
+  .dot.black{background:#000;color:#fff}
+  .dot.white{background:#fff;color:#000}
+  /* grid 3×3 placeholder — wordt per TODO gevuld */
+  #g3{width:100%;max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .gcell{aspect-ratio:1/1;display:grid;place-items:center;border:1px solid #fff;background:#000;color:#fff;text-align:center;padding:6px}
+  .gcircle{border-radius:50%}
+  .gblock{border-radius:8px;font-weight:700}
+  .gcell small{opacity:.8}
+  /* ASCII meter */
+  .meter-wrap{width:100%;margin:12px 0 0 0}
+  #ascii30{display:block;width:100%;margin:0;padding:6px 10px;border:1px solid #fff;border-radius:8px;white-space:pre;background:#000;color:#fff}
 </style>
-
 <body>
   <div id="phone">
     <header>
       <div id="clock">--:--:--</div>
     </header>
-<div class='meter-wrap'><pre id='ascii30'>[##############################] 30</pre></div>
-<div id="g3">
-  <div class="gcell"></div>
-  <button class="gcell gcircle" data-pos="0,1">Back<br><small>(-0.1 kukel)</small></button>
-  <div class="gcell"></div>
 
-  <button class="gcell gcircle" data-pos="1,0">UP<br><small>(+1 kukel)</small></button>
-  <div class="gcell gblock"  data-pos="1,1">INDEX</div>
-  <button class="gcell gcircle" data-pos="1,2">back<br><small>(-1 kukel)</small></button>
-
-  <div class="gcell"></div>
-  <button class="gcell gcircle" data-pos="2,1">For<br><small>(+0.1 kukel)</small></button>
-  <div class="gcell"></div>
-</div>
+    <!-- TODO 0 START: ASCII 30s bar (viewport width) -->
+    <div class="meter-wrap"><pre id="ascii30">[##############################] 30</pre></div>
+    <!-- TODO 0 END -->
 
     <main>
-      <div class="rule"></div>
-      <button class="btn cap">BLACK ⇄ CAPITAL</button>
-      <button class="btn white">white ⇄ lower</button>
-      <div class="rule"></div>
+      <!-- ruimte voor toekomstige content -->
     </main>
 
     <footer>
       <div class="dots">
-        <div class="dot black cap">●</div>
+        <div class="dot black"><b>●</b></div>
         <div class="dot white">○</div>
       </div>
+
+      <!-- TODO 1 START: 3×3 control grid onder de dots -->
+      <div id="g3">
+        <div class="gcell"></div>
+        <button class="gcell gcircle" data-pos="0,1">Back<br><small>(-0.1 kukel)</small></button>
+        <div class="gcell"></div>
+
+        <button class="gcell gcircle" data-pos="1,0">UP<br><small>(+1 kukel)</small></button>
+        <div class="gcell gblock" data-pos="1,1">INDEX</div>
+        <button class="gcell gcircle" data-pos="1,2">back<br><small>(-1 kukel)</small></button>
+
+        <div class="gcell"></div>
+        <button class="gcell gcircle" data-pos="2,1">For<br><small>(+0.1 kukel)</small></button>
+        <div class="gcell"></div>
+      </div>
+      <!-- TODO 1 END -->
     </footer>
   </div>
 
+  <!-- TODO 0 SCRIPT: clock + ASCII 30s synced to seconds -->
   <script>
-  // tiny clock, no other logic yet (keeps shapes stable)
-  (function tick(){
-    var c=document.getElementById('clock'); if(!c) return;
-    var d=new Date();
+  (function(){
+    var C=document.getElementById('clock');
+    var M=document.getElementById('ascii30');
     function z(n){return String(n).padStart(2,'0')}
-    var txt = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
-    c.textContent = txt;
-    setTimeout(tick, 500);
+    function lenFor(el){ try{
+      var w=(el&&el.clientWidth)?el.clientWidth:(document.getElementById('phone')?.clientWidth||360);
+      return Math.max(30, Math.floor((w - 32)/8));
+    }catch(_){return 30}}
+    var LEN=lenFor(M);
+    window.addEventListener('resize', ()=>{ LEN=lenFor(M); }, {passive:true});
+
+    function step(){
+      var d=new Date();
+      if (C) C.textContent = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
+      var s=d.getSeconds();                 // 0..59
+      var within=(s===0?30:(s<=30?s:s-30)); // 1..30
+      var remaining=30-within;              // 29..0 → toon 30→00
+      var fill=Math.round((remaining/30)*LEN);
+      if(M){
+        var left='#'.repeat(fill), right='-'.repeat(Math.max(0,LEN-fill));
+        M.textContent='['+left+right+'] '+z(remaining);
+      }
+      setTimeout(step,200);
+    }
+    step();
   })();
   </script>
-<script>
-/* ascii 30s bar */
-(function(){
-  const C = document.getElementById('clock');
-  const M = document.getElementById('ascii30');
-  const LEN = 30;                     // 30 segments, one per second of remaining time
-  function z(n){ return String(n).padStart(2,'0'); }
-  function step(){
-    const d = new Date();
-    // clock (HH:MM:SS)
-    if (C) C.textContent = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
-    // seconds within half-minute -> 1..30
-    const s = d.getSeconds();                         // 0..59
-    const within = (s===0 ? 30 : (s<=30 ? s : s-30)); // 1..30
-    const remaining = 30 - within;                    // 29..0 (visual count-down 30→00)
-    const fill = remaining;                           // 0..30 filled cells
-    if (M){
-      const bar = '[' + '#'.repeat(fill) + '-'.repeat(LEN-fill) + '] ' + z(remaining);
-      M.textContent = bar;
-    }
-    setTimeout(step, 200); // smooth enough, low power
-  }
-  step();
-})();
-</script><script>
-/* ascii 30s fullwidth */
-(function(){
-  var M = document.getElementById('ascii30');
-  function z(n){ return String(n).padStart(2,'0'); }
-  function lenForWidth(){
-    var w = Math.max(320, (window.innerWidth||320));
-    // benadering: ~8px per monospace char incl. padding → schermvullend
-    return Math.max(30, Math.floor((w - 40) / 8)); // min 30 segmenten
-  }
-  var LEN = lenForWidth();
-  window.addEventListener('resize', function(){ LEN = lenForWidth(); }, {passive:true});
-
-  function step(){
-    var d = new Date();
-    // seconds binnen halve minuut 1..30
-    var s = d.getSeconds();                 // 0..59
-    var within = (s===0 ? 30 : (s<=30 ? s : s-30)); // 1..30
-    var remaining = 30 - within;            // 29..0 (visueel 30→00)
-    // vulgraad schaalt naar volle breedte
-    var fill = Math.round((remaining/30) * LEN); // 0..LEN
-    if (M){
-      var left  = '#'.repeat(fill);
-      var right = '-'.repeat(Math.max(0, LEN - fill));
-      M.textContent = '[' + left + right + '] ' + z(remaining);
-    }
-    setTimeout(step, 200);
-  }
-  step();
-})();
-</script></body>
+</body>
 </html>
-
 
