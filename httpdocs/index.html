@@ -327,8 +327,55 @@
   });
 })();
 </script>
+<script>
+/* tab/yellow selection */
+(function(){
+  function q(id){ return document.getElementById(id); }
+  var red=q('dot-red'), green=q('dot-green');
+  if(!red||!green) return;
+
+  // maak ze focusable/semantisch
+  red.setAttribute('role','button');   red.setAttribute('tabindex','0');
+  green.setAttribute('role','button'); green.setAttribute('tabindex','0');
+
+  // helper om selected te zetten (en aria)
+  function setSelected(which){
+    var r = (which==='red');
+    red.classList.toggle('sel', r);
+    green.classList.toggle('sel', !r);
+    red.setAttribute('aria-selected', r?'true':'false');
+    green.setAttribute('aria-selected', !r?'true':'false');
+    // focus verplaatsen
+    (r?red:green).focus({preventScroll:true});
+  }
+
+  // klik-hooks: selectie volgt tap/klik (bestaande click handlers voor lang/caps/time blijven werken)
+  red.addEventListener('click', function(){ setSelected('red'); }, {capture:false});
+  green.addEventListener('click', function(){ setSelected('green'); }, {capture:false});
+
+  // TAB: alleen tussen red ↔ green wisselen + tik/tok via click()
+  function tik(){ try{ window.dispatchEvent(new Event('tik')); }catch(e){} }   // no-op fallback
+  function tok(){ try{ window.dispatchEvent(new Event('tok')); }catch(e){} }
+
+  // we gebruiken jouw bestaande TIK/TOK uit de dots-logic door simpelweg .click() aan te roepen
+  window.addEventListener('keydown', function(e){
+    if (e.key !== 'Tab') return;
+    e.preventDefault(); // stop default tabbing; we beheren het zelf
+    var toRed = !red.classList.contains('sel');   // als green geselecteerd → ga naar red
+    if (toRed){
+      red.click();   // triggert jouw lang=en, caps on, hold & TIK
+    } else {
+      green.click(); // triggert jouw lang=nl, lower, go   & TOK
+    }
+  });
+
+  // default state = selected red
+  setSelected('red');
+})();
+</script>
 </body>
 </html>
+
 
 
 
