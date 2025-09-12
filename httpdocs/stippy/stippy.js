@@ -50,7 +50,7 @@
   // auto hide als selectie verdwijnt
   document.addEventListener('keyup', () => { if (window.getSelection && window.getSelection().isCollapsed) hide(); });
   document.addEventListener('pointerdown', e => {
-    // tik in lege ruimte  verberg
+    // tik in lege ruimte → verberg
     if (!rectFromSelection()) hide();
   }, { passive: true });
 })();
