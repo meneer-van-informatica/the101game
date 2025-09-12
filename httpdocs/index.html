@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <!--
 # index.html - TODO 0 - DESC: wireframe + klok + ASCII 30s balk
@@ -15,7 +15,7 @@
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>index · wireframe</title>
+<title>index Â· wireframe</title>
 <style>
   :root{ --w:min(100vw,420px); --bg:#000; --fg:#fff; --line:#fff }
   *{ box-sizing:border-box }
@@ -47,7 +47,7 @@
   </div>
 
 <script>
-/* clk + ascii (30→00), viewport-width */
+/* clk + ascii (30â†’00), viewport-width */
 (function(){
   const C = document.getElementById('clock');
   const M = document.getElementById('ascii30');
@@ -60,7 +60,7 @@
     if (C) C.textContent = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
     const s = d.getSeconds();                  // 0..59
     const within = (s===0 ? 30 : (s<=30 ? s : s-30)); // 1..30
-    const remaining = 30 - within;             // 29..0 (visual 30→00)
+    const remaining = 30 - within;             // 29..0 (visual 30â†’00)
     const fill = Math.round((remaining/30)*LEN);
     if (M){
       const left  = '#'.repeat(fill);
@@ -147,73 +147,75 @@
   (document.readyState==='loading')?document.addEventListener('DOMContentLoaded',load,{once:true}):load();
 })();
 </script>
-<!-- stippy ui: captions + 10s ascii + rode stip -->
+<!-- stippy ui: captions + 10s ascii + rode stip + stoplicht -->
 <div id='stippy-ui' style='position:fixed;left:0;right:0;bottom:0;display:grid;gap:6px;justify-items:center;padding:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);z-index:9999'>
-  <div id='stippy-dot' style='width:18px;height:18px;border-radius:50%;background:#f00;transition:transform .12s ease;transform:scale(.7)'></div>
+  <div style='display:flex;gap:10px;align-items:center'>
+    <div id='stippy-dot' style='width:18px;height:18px;border-radius:50%;background:#f00;transition:transform .12s ease;transform:scale(.7)'></div>
+    <div id='stippy-lights' aria-label='stoplight' style='display:flex;gap:6px;align-items:center'>
+      <div id='light-red'    title='red'    style='width:12px;height:12px;border-radius:50%;background:#400;opacity:.6'></div>
+      <div id='light-orange' title='orange' style='width:12px;height:12px;border-radius:50%;background:#430;opacity:.6'></div>
+      <div id='light-green'  title='green'  style='width:12px;height:12px;border-radius:50%;background:#040;opacity:.6'></div>
+    </div>
+  </div>
   <div id='stippy-caption' style='color:#fff;font:14px/1.4 ui-monospace,consolas,monospace;text-align:center;white-space:pre-wrap'></div>
   <pre id='stippy-chrono' style='margin:0;color:#fff;font:14px/1.2 ui-monospace,consolas,monospace'>[##########] 10</pre>
 </div>
 <script>
-/* tiny srt player + 10s ascii + red dot pulse */
 (function(){
-  const cap  = document.getElementById('stippy-caption');
-  const dot  = document.getElementById('stippy-dot');
+  const cap    = document.getElementById('stippy-caption');
+  const dot    = document.getElementById('stippy-dot');
   const chrono = document.getElementById('stippy-chrono');
-  if(!cap || !dot || !chrono) return;
+  const L={red:document.getElementById('light-red'),orange:document.getElementById('light-orange'),green:document.getElementById('light-green')};
+  if(!cap||!dot||!chrono) return;
+
+  function setLight(s){
+    const dim={red:'#400',orange:'#430',green:'#040'}, lit={red:'#f00',orange:'#fa0',green:'#0f0'};
+    for(const k of ['red','orange','green']){
+      const el=L[k]; if(!el) continue;
+      if(k===s){ el.style.background=lit[k]; el.style.opacity='1'; el.style.boxShadow='0 0 8px 1px '+lit[k]; }
+      else{ el.style.background=dim[k]; el.style.opacity='.6'; el.style.boxShadow='none'; }
+    }
+  }
 
   function parseSRT(txt){
-    const cues = [];
-    const blocks = txt.replace(/\r/g,'').split(/\n\s*\n/);
+    const cues=[], blocks=txt.replace(/\r/g,'').split(/\n\s*\n/);
     for(const b of blocks){
-      const lines = b.trim().split('\n');
-      if(lines.length < 2) continue;
-      const m = lines[1].match(/(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)/);
-      if(!m) continue;
-      const s = (+m[1])*3600 + (+m[2])*60 + (+m[3]) + (+m[4])/1000;
-      const e = (+m[5])*3600 + (+m[6])*60 + (+m[7]) + (+m[8])/1000;
-      const text = lines.slice(2).join('\n');
-      cues.push({s,e,text});
+      const lines=b.trim().split('\n'); if(lines.length<2) continue;
+      const m=lines[1].match(/(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)/); if(!m) continue;
+      const s=(+m[1])*3600+(+m[2])*60+(+m[3])+(+m[4])/1000, e=(+m[5])*3600+(+m[6])*60+(+m[7])+(+m[8])/1000;
+      const text=lines.slice(2).join('\n'); cues.push({s,e,text});
     }
     return cues.sort((a,b)=>a.s-b.s);
   }
 
   function asciiBar(rem,total,len){
-    const left = Math.max(0, Math.min(total, Math.ceil(rem)));
-    const fill = Math.round((rem/total)*len);
-    const bar  = '#'.repeat(fill) + '-'.repeat(Math.max(0, len-fill));
-    return '[' + bar + '] ' + String(left).padStart(2,'0');
+    const left=Math.max(0,Math.min(total,Math.ceil(rem)));
+    const fill=Math.round((rem/total)*len);
+    return '['+'#'.repeat(fill)+'-'.repeat(Math.max(0,len-fill))+'] '+String(left).padStart(2,'0');
   }
 
   async function load(){
     try{
-      const r = await fetch('/specs/index.srt?v=' + Date.now(), {cache:'no-store'});
-      const txt = await r.text();
-      const cues = parseSRT(txt);
-      const total = 10.0;
-      const len = 10;
-
-      const t0 = performance.now();
+      const r=await fetch('/specs/index.srt?v='+Date.now(),{cache:'no-store'});
+      const txt=await r.text(), cues=parseSRT(txt);
+      const total=10.0, len=10, edge=0.15, t0=performance.now();
       function tick(){
-        const t = (performance.now() - t0) / 1000;
-        const rem = Math.max(0, total - t);
-        // caption
-        const c = cues.find(q => t >= q.s && t < q.e);
-        cap.textContent = c ? c.text : '';
-        // dot pulse: groot bij spreken, klein bij stilte
-        dot.style.transform = c ? 'scale(1.8)' : 'scale(0.7)';
-        // ascii countdown
-        chrono.textContent = asciiBar(rem, total, len);
-        if(t < total + 0.25) requestAnimationFrame(tick);
+        const t=(performance.now()-t0)/1000, rem=Math.max(0,total-t);
+        const c=cues.find(q=>t>=q.s && t<q.e);
+        cap.textContent=c?c.text:'';
+        if(c){ const near=(t-c.s<=edge)||(c.e-t<=edge); setLight(near?'orange':'green'); dot.style.transform='scale(1.8)'; }
+        else{ setLight('red'); dot.style.transform='scale(0.7)'; }
+        chrono.textContent=asciiBar(rem,total,len);
+        if(t<total+0.3) requestAnimationFrame(tick);
       }
       tick();
     }catch(_){
-      cap.textContent = '[stippy offline]';
-      dot.style.transform = 'scale(0.7)';
-      chrono.textContent = '[----------] 00';
+      cap.textContent='[stippy offline]'; setLight('red'); dot.style.transform='scale(0.7)'; chrono.textContent='[----------] 00';
     }
   }
-  (document.readyState === 'loading') ? document.addEventListener('DOMContentLoaded', load, {once:true}) : load();
+  (document.readyState==='loading')?document.addEventListener('DOMContentLoaded',load,{once:true}):load();
 })();
 </script>
 </body>
 </html>
+
