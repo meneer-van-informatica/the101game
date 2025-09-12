@@ -59,7 +59,8 @@ html,body{background:var(--bg);color:var(--fg)}
     </div>
   </div>
 
-  <div id="wrap">
+  <section id='story'></section>
+<div id="wrap">
     <section id="view" aria-label="tetris 40x400">
       <div id="legend" aria-hidden="true"></div>
     </section>
@@ -197,6 +198,36 @@ document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=f
 document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue');};
 document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
 </script>
-</div></body>
+</div><script>
+/* story render */
+(function(){
+  const el = document.getElementById('story');
+  function nl(){
+    return 
+      <h2>informatica: kees 0..4</h2>
+      <p>informatica begon met een tweeling: <b>kees 1</b> (case 0) en <b>kees 2</b> (case 1).</p>
+      <p>kees 1 zei altijd <b>ja</b>, kees 2 altijd <b>nee</b>. prima voor bits, saai voor gesprekken.</p>
+      <p>toen kwam <b>kees 0</b> (case 2): <b>misschien</b> — de buffer tussen ja en nee.</p>
+      <p>\"waar is <b>kees 4</b>?\" in de <b>toekomst</b>: <code>100₂</code>. hij zegt: <b>ja, maar later</b>.</p>
+    ;
+  }
+  function en(){
+    return 
+      <h2>computing: kees 0..4</h2>
+      <p>computing started with twins: <b>kees 1</b> (case 0) and <b>kees 2</b> (case 1).</p>
+      <p>kees 1 always said <b>yes</b>, kees 2 always <b>no</b>. great for bits, boring for chats.</p>
+      <p>then <b>kees 0</b> (case 2) arrived: <b>maybe</b> — the buffer between yes and no.</p>
+      <p>\"where is <b>kees 4</b>?\" in the <b>future</b>: <code>100₂</code>. he says: <b>yes, but later</b>.</p>
+    ;
+  }
+  function render(){
+    const L = localStorage.getItem('site_lang') || 'en';
+    el.innerHTML = (L==='nl') ? nl() : en();
+  }
+  if (el) { render(); }
+})();
+</script>
+</body>
 </html>
+
 
