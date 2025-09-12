@@ -1,15 +1,3 @@
 ﻿1
-00:00:00,000 --> 00:00:02,400
-[STIPPY] welkom bij the one oh one game
-
-2
-00:00:03,000 --> 00:00:05,000
-[STIPPY] kies taal met nul of een
-
-3
-00:00:05,000 --> 00:00:06,800
-[STIPPY] honden en katten strijden om kukels
-
-4
-00:00:07,200 --> 00:00:09,000
-[STIPPY] genesis is nul kukel, w0l0 is een
+00:00:00,000 --> 00:00:10,000
+[stippy] HELLO MAMA
