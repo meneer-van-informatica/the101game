@@ -689,7 +689,7 @@ setTimeout(()=>{ location.assign('/w0l0.html'); }, 30000);
     (async ()=>{
       const L = (localStorage.getItem('site_lang')||'en');
       let c=await ensureGenesis();
-      const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, ts:Date.now()};
+      const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, worth:0, ts:Date.now()};
       const hash=await sha(JSON.stringify({i,prev,data}));
       c.push({i,prev,data,hash}); save(c);
     })();
@@ -697,6 +697,7 @@ setTimeout(()=>{ location.assign('/w0l0.html'); }, 30000);
 })();
 </script></body>
 </html>
+
 
 
 

@@ -38,7 +38,7 @@
   }
   (async ()=>{
     let c=await ensureGenesis();
-    const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, ts:Date.now()};
+    const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, worth:1, ts:Date.now()};
     const hash=await sha(JSON.stringify({i,prev,data}));
     c.push({i,prev,data,hash}); save(c);
   })();
@@ -46,3 +46,4 @@
 </script>
 </body>
 </html>
+
