@@ -1,49 +1,46 @@
 ﻿<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l0 · hello</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>w0l0</title>
 <style>
-  :root{--bg:#000;--fg:#eaeaea}
-  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.4 ui-monospace,consolas,monospace}
-  main{min-height:100dvh;display:grid;place-items:center;padding:16px}
-  h1{font-size:clamp(36px,8vmin,64px);margin:0;text-transform:none}
-  #note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 12px);opacity:.8;font-size:.9rem}
+  :root{--w:min(100vw,420px);--bg:#000;--fg:#fff;--line:#fff}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.35 ui-monospace,consolas,monospace}
+  #phone{width:var(--w);min-height:100dvh;margin:0 auto;display:flex;flex-direction:column;gap:18px;align-items:center;justify-content:center;padding:16px}
+  .btn{display:inline-block;padding:.7rem 1rem;border:1px solid var(--line);border-radius:10px;color:#fff;text-decoration:none}
 </style>
 <body>
-<main>
-  <h1 id="greet">HELLO</h1>
-</main>
-<div id="note">back to /index.html in <b id="sec">10</b>s · sign: LMW</div>
+<div id="phone">
+  <h1 id="msg" style="margin:0">HELLO</h1>
+  <a class="btn" href="/index.html">back to km</a>
+</div>
+
 <script>
-/* w0l0 greet + bounce + blockchain append (LMW) */
 (function(){
-  const L = (localStorage.getItem('site_lang')||'en');
-  document.documentElement.setAttribute('lang', L);
-  document.getElementById('greet').textContent = (L==='en') ? 'HELLO' : 'hallo';
+  // message by lang
+  const L = localStorage.getItem('site_lang')||'en';
+  document.documentElement.setAttribute('lang',L);
+  const el = document.getElementById('msg');
+  if (L==='nl'){ if(el) el.textContent='hallo'; document.title='w0l0 · hallo'; }
+  else         { if(el) el.textContent='HELLO'; document.title='w0l0 · HELLO'; }
 
-  // 10s countdown → index
-  let t=10; const sec=document.getElementById('sec');
-  const iv=setInterval(()=>{ t--; if (sec) sec.textContent=String(t); if(t<=0){ clearInterval(iv); location.assign('/index.html'); }},1000);
-
-  // ---- local blockchain (browser) ----
-  async function sha(s){ const b=new TextEncoder().encode(s); const h=await crypto.subtle.digest('SHA-256',b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
-  function load(){ try{return JSON.parse(localStorage.getItem('the101game_chain')||'[]')}catch(_){return []} }
-  function save(c){ localStorage.setItem('the101game_chain', JSON.stringify(c)); try{ localStorage.setItem('kukel_total', String(c.length)); }catch(_){ } }
+  // local chain append (worth 1)
+  async function sha(s){const b=new TextEncoder().encode(s);const h=await crypto.subtle.digest('SHA-256',b);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+  function load(){try{return JSON.parse(localStorage.getItem('the101game_chain')||'[]')}catch(_){return []}}
+  function save(c){localStorage.setItem('the101game_chain',JSON.stringify(c));try{localStorage.setItem('kukel_total',String(c.length))}catch(_){}}  
   async function ensureGenesis(){
     let c=load(); if(c.length) return c;
-    const data={owner:'LMW', path:'/genesis', ts:Date.now(), note:'start'};
-    const prev='0'.repeat(64); const hash=await sha(JSON.stringify({i:0,prev,data}));
+    const data={owner:'LMW',path:'/genesis',worth:0,ts:Date.now(),note:'start'};
+    const prev='0'.repeat(64), hash=await sha(JSON.stringify({i:0,prev,data}));
     c=[{i:0,prev,data,hash}]; save(c); return c;
   }
-  (async ()=>{
+  (async()=>{
     let c=await ensureGenesis();
-    const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, worth:1, ts:Date.now()};
-    const hash=await sha(JSON.stringify({i,prev,data}));
-    c.push({i,prev,data,hash}); save(c);
+    const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW',path:location.pathname,worth:1,lang:L,ts:Date.now()};
+    const hash=await sha(JSON.stringify({i,prev,data})); c.push({i,prev,data,hash}); save(c);
   })();
 })();
 </script>
 </body>
 </html>
-
