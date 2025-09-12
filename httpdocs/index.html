@@ -31,6 +31,19 @@
       <div id="clock">--:--:--</div>
     </header>
 <div class='meter-wrap'><pre id='ascii30'>[##############################] 30</pre></div>
+<div id="g3">
+  <div class="gcell"></div>
+  <button class="gcell gcircle" data-pos="0,1">Back<br><small>(-0.1 kukel)</small></button>
+  <div class="gcell"></div>
+
+  <button class="gcell gcircle" data-pos="1,0">UP<br><small>(+1 kukel)</small></button>
+  <div class="gcell gblock"  data-pos="1,1">INDEX</div>
+  <button class="gcell gcircle" data-pos="1,2">back<br><small>(-1 kukel)</small></button>
+
+  <div class="gcell"></div>
+  <button class="gcell gcircle" data-pos="2,1">For<br><small>(+0.1 kukel)</small></button>
+  <div class="gcell"></div>
+</div>
 
     <main>
       <div class="rule"></div>
@@ -82,6 +95,37 @@
   }
   step();
 })();
+</script><script>
+/* ascii 30s fullwidth */
+(function(){
+  var M = document.getElementById('ascii30');
+  function z(n){ return String(n).padStart(2,'0'); }
+  function lenForWidth(){
+    var w = Math.max(320, (window.innerWidth||320));
+    // benadering: ~8px per monospace char incl. padding → schermvullend
+    return Math.max(30, Math.floor((w - 40) / 8)); // min 30 segmenten
+  }
+  var LEN = lenForWidth();
+  window.addEventListener('resize', function(){ LEN = lenForWidth(); }, {passive:true});
+
+  function step(){
+    var d = new Date();
+    // seconds binnen halve minuut 1..30
+    var s = d.getSeconds();                 // 0..59
+    var within = (s===0 ? 30 : (s<=30 ? s : s-30)); // 1..30
+    var remaining = 30 - within;            // 29..0 (visueel 30→00)
+    // vulgraad schaalt naar volle breedte
+    var fill = Math.round((remaining/30) * LEN); // 0..LEN
+    if (M){
+      var left  = '#'.repeat(fill);
+      var right = '-'.repeat(Math.max(0, LEN - fill));
+      M.textContent = '[' + left + right + '] ' + z(remaining);
+    }
+    setTimeout(step, 200);
+  }
+  step();
+})();
 </script></body>
 </html>
+
 
