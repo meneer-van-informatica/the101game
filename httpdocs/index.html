@@ -2,54 +2,143 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>the101game · choose language</title>
+<title>the101game · choose</title>
 <style>
-  :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a; }
+  :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a }
   *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
-  #phone{width:var(--phone-w);min-height:100dvh;margin:0 auto;padding:16px 12px;display:flex;flex-direction:column;gap:14px}
-  h1{margin:0 0 4px 0;font-size:16px;opacity:.85}
-  #lang-quick{display:flex;gap:12px;flex-wrap:wrap}
-  .langbtn{flex:1 1 160px;padding:.9rem 1rem;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:10px;font-weight:700;text-transform:lowercase}
-  .hint{opacity:.75}
+  #phone{width:var(--phone-w);min-height:100dvh;margin:0 auto;position:relative;display:flex;flex-direction:column}
+  /* top row: language tiles + progress */
+  .top{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px}
+  .lang{border:2px solid #333;border-radius:10px;padding:.6rem .8rem;text-transform:lowercase;font-weight:700;text-align:center;user-select:none}
+  .lang.en.selected{border-color:#2ee670;box-shadow:0 0 0 2px #2ee67044 inset}
+  .lang.nl.selected{border-color:#e62e2e;box-shadow:0 0 0 2px #e62e2e44 inset}
+  .progress{position:absolute;left:50%;transform:translateX(-50%);top:100%;height:8px;width:80%;margin-top:8px;border:1px solid #333;border-radius:999px;overflow:hidden}
+  .bar{height:100%;width:0;background:linear-gradient(90deg,#2ee670, #e62e2e)}
+  /* center area spacer */
+  .spacer{flex:1}
+  /* red dot button bottom center */
+  #reddot{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);
+          width:64px;height:64px;border-radius:50%;background:#ff2a2a;
+          box-shadow:0 0 0 2px rgba(255,42,42,.25), 0 0 16px rgba(255,42,42,.6);
+          display:grid;place-items:center;cursor:pointer;user-select:none}
+  #reddot:active{transform:translateX(-50%) scale(.96)}
+  #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 92px);opacity:.75;font-size:.9em}
 </style>
 <body>
 <div id="phone">
-  <h1>the101game</h1>
-  <div id="lang-quick">
-    <button id="choose-en" class="langbtn">english</button>
-    <button id="choose-nl" class="langbtn">nederlands</button>
+  <div class="top">
+    <div id="en" class="lang en selected">english</div>
+    <div id="nl" class="lang nl">nederlands</div>
+    <div class="progress"><div id="bar" class="bar"></div></div>
   </div>
-  <div class="hint">tap one to begin · 0=en · 1=nl</div>
+  <div class="spacer"></div>
 </div>
+<div id="hint">tap the red dot to switch · chime toggles</div>
+<div id="reddot" aria-label="toggle language"></div>
+
 <script>
-(function(){
-  function primeAudioIntent(){
-    try{
-      const AC=window.AudioContext||window.webkitAudioContext;
-      if(AC){ const a=new AC(), g=a.createGain(); g.gain.value=0.0001;
-        const o=a.createOscillator(); o.type='sine'; o.frequency.value=440;
-        o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+0.01);
-        a.resume?.(); setTimeout(()=>{try{a.close()}catch(_){}} ,30);
-      }
-    }catch(_){}
+/* choose ui */
+let choice = 'en'; // default english (green outline)
+const enEl = document.getElementById('en');
+const nlEl = document.getElementById('nl');
+function applyChoice(lang){
+  choice = lang;
+  enEl.classList.toggle('selected', lang==='en');
+  nlEl.classList.toggle('selected', lang==='nl');
+}
+/* toggle on red dot */
+document.getElementById('reddot').addEventListener('click', () => {
+  applyChoice(choice==='en'?'nl':'en');
+  chime(); // sound on toggle
+});
+
+/* also clickable tiles */
+enEl.onclick = ()=>{ applyChoice('en'); chime(); };
+nlEl.onclick = ()=>{ applyChoice('nl'); chime(); };
+
+/* ---------- audio core ---------- */
+let ac, pre, comp, master, chimex=0;
+function initAudio(){ if(ac) return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  pre=ac.createGain(); pre.gain.value=4.0;
+  comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+  master=ac.createGain(); master.gain.value=0.15; // bescheiden op start
+  pre.connect(comp); comp.connect(master); master.connect(ac.destination);
+}
+async function prime(){ try{initAudio(); if(ac.state==='suspended') await ac.resume(); }catch(_){ } }
+function chime(){
+  prime();
+  const t=ac.currentTime;
+  if ((chimex^=1)===1){
+    tone(880, t, 0.15); tone(1320, t+0.02, 0.12);
+  } else {
+    tone(659, t, 0.15); tone(990, t+0.02, 0.12);
+  }
+}
+function tone(freq, at, dur){
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type='sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.9, at+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+  o.connect(g); g.connect(pre); o.start(at); o.stop(at+dur+0.02);
+}
+/* snare = TIK/TOK */
+function snare(at){
+  // noise burst
+  const len=ac.sampleRate*0.2, buf=ac.createBuffer(1,len,ac.sampleRate), data=buf.getChannelData(0);
+  for(let i=0;i<len;i++){ data[i]=Math.random()*2-1; }
+  const src=ac.createBufferSource(); src.buffer=buf;
+  const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; bp.Q.value=0.9;
+  const hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=600;
+  const g=ac.createGain(); g.gain.setValueAtTime(0.8,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.16);
+  src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(pre);
+  src.start(at); src.stop(at+0.18);
+}
+function tiktok(progress){
+  // progress 0..1 -> faster towards 1. map to bpm 90..240
+  const bpm = 90 + (240-90)*progress;
+  const interval = 60/bpm; // seconds
+  prime().then(()=>{
+    const start = ac.currentTime + 0.02;
+    // schedule a few beats ahead (we’ll call again next frame)
+    snare(start);
+    // optional soft tick overlay
+    tone(1200, start, 0.06);
+    tiktok.next = (performance.now()/1000) + interval; // store in wallclock secs
+    tiktok.interval = interval;
+  });
+}
+
+/* ---------- 5s timer: bar green->red; tiktoks speed up; then goto /w0l0 ---------- */
+const bar = document.getElementById('bar');
+const T = 5_000; // ms
+let t0 = performance.now();
+function loop(now){
+  const dt = now - t0;
+  const p = Math.max(0, Math.min(1, dt / T));
+  bar.style.width = (p*100) + '%';
+  // drive tempo/snare
+  const nowS = now/1000;
+  if (!tiktok.next || nowS >= tiktok.next) { tiktok(p); }
+  if (p >= 1){
+    // finalize choice -> storage + go
+    localStorage.setItem('site_lang', choice);
+    if (choice==='nl'){ localStorage.setItem('w_msg_text','hallo mama'); localStorage.setItem('w_msg_case','1'); }
+    else              { localStorage.setItem('w_msg_text','HELLO MAMA'); localStorage.setItem('w_msg_case','0'); }
+    // intent for audio on next page
     localStorage.setItem('w_audio_intent','1');
     localStorage.setItem('w_audio_intent_ts', String(Date.now()));
-  }
-  function choose(lang){
-    localStorage.setItem('site_lang', lang);
-    if(lang==='nl'){ localStorage.setItem('w_msg_text','hallo mama'); localStorage.setItem('w_msg_case','1'); }
-    else{           localStorage.setItem('w_msg_text','HELLO MAMA'); localStorage.setItem('w_msg_case','0'); }
-    primeAudioIntent();
     location.assign('/w0l0.html');
+    return;
   }
-  function bind(){
-    document.getElementById('choose-en')?.addEventListener('click', ()=>choose('en'));
-    document.getElementById('choose-nl')?.addEventListener('click', ()=>choose('nl'));
-    window.addEventListener('keydown', (e)=>{ if(e.key==='0') choose('en'); if(e.key==='1') choose('nl'); });
-  }
-  if(document.readyState==='complete'||document.readyState==='interactive') bind();
-  else document.addEventListener('DOMContentLoaded', bind, {once:true});
-})();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* first user gesture unlocks reliably */
+window.addEventListener('pointerdown', ()=>prime(), {once:true, capture:true});
+window.addEventListener('keydown',  ()=>prime(), {once:true, capture:true});
 </script>
 </body>
 </html>
