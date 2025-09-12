@@ -1,56 +1,43 @@
 <!doctype html>
-<html lang='en'>
+<html lang='nl'>
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>W0L0 - KISS</title>
+<title>the101game · w0l0</title>
 <style>
-:root{--a3w:2480;--a3h:3508;--bg:#000;--fg:#eee;--accent:#ffd400;--gridw:40;--gridh:400}
-*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:16px/1.35 'Courier New',monospace}
-#stage{width:100vw;height:100vh;display:grid;place-items:center}
-.a3{width:min(100vw,calc(100vh*(var(--a3w)/var(--a3h))));aspect-ratio:calc(var(--a3w)/var(--a3h));border:1px solid var(--accent);padding:32px;position:relative}
-.line{white-space:pre;font-size:clamp(12px,1.9vw,22px);margin:4px 0}
-#tetris{position:absolute;left:5%;top:35%;width:90%;height:55%;display:grid;
-  grid-template-columns:repeat(var(--gridw),1fr);grid-template-rows:repeat(var(--gridh),1fr);
-  border:1px dashed var(--fg);opacity:.85}
-#tetris div{outline:1px solid #111;background:transparent}
+  html,body{margin:0;height:100%;background:#000;color:#eaeaea;font:16px/1.5 ui-monospace,consolas,monospace}
+  main{min-height:100%;display:grid;place-items:center;padding:4vh 4vw}
+  .card{width:min(720px,92vw);border:1px solid #333;border-radius:8px;padding:20px}
+  .line{white-space:pre-wrap;margin:.35rem 0}
+  .hint{opacity:.6;font-size:.9rem;margin-top:1rem}
 </style>
 <body>
-<div id='stage'>
-  <main class='a3' id='canvas' data-kind='A3'>
-    <div class='line' data-key='SCENE'>[W0L0.HTML] # scene.file. W0L0.HTML == index.html</div>
-    <div class='line' data-key='MODEL'>[KISS.FIRE] # model.element</div>
-    <div class='line' data-key='VISION'>[VISION] # DATA</div>
-    <div class='line' data-key='MISSION'>[MISSION] # INFORMATION</div>
-    <div class='line' data-key='STRATEGY'>[STRATEGY] # KNOWLEDGE</div>
-    <div class='line' data-key='TACTIC'>[TACTIC] # WISDOM</div>
-    <div class='line' data-key='PUZZLE'>[PUZZLE]</div>
-    <div class='line' data-key='TETRIS'>[TETRIS SCREEN pixels en floats]</div>
-    <div class='line' data-key='TUNNEL'>[TUNNEL]</div>
-    <div class='line' data-key='OWNER'>[MESSAGE OWNER]</div>
-    <section id='tetris' aria-label='tetris-40x400'></section>
-  </main>
-</div>
+<main>
+  <section class='card' id='id'>
+    <div class='line' data-key='side'>i am right</div>
+    <div class='line' data-key='case'>i am lowercase</div>
+    <div class='line' data-key='name'>i am bert</div>
+    <div class='line' data-key='ernie'>ernie is not here</div>
+    <div class='line' data-key='left'>he is left</div>
+    <div class='line' data-key='noise'>a screamer</div>
+    <div class='hint'>edit live in console: set('name','i am bert v2')</div>
+  </section>
+</main>
 <script>
-// A3 FLOAT COORDINATES
-const A3={w:2480,h:3508}; function xy(xf,yf){return {x:xf*A3.w,y:yf*A3.h}}
-
-// TETRIS GRID 40x400 (PLACEHOLDER)
-;(function(){const g=document.getElementById('tetris');const n=40*400;const f=document.createDocumentFragment();for(let i=0;i<n;i++){f.appendChild(document.createElement('div'))}g.appendChild(f)})()
-
-// PUBLISH-LIKE EDITS VIA LOCALSTORAGE
-const KEY='w0l0_page_edits'
-function applyEdits(){const m=JSON.parse(localStorage.getItem(KEY)||'{}');for(const k in m){const el=document.querySelector('[data-key="'+k+'"]');if(el){el.textContent=m[k]}}}
-applyEdits()
-
-// CONSOLE HELPERS
-window.edit=function(findText,newText){
-  const keyEl=document.querySelector('[data-key="'+findText+'"]')
-  if(keyEl){keyEl.textContent=newText;const m=JSON.parse(localStorage.getItem(KEY)||'{}');m[findText]=newText;localStorage.setItem(KEY,JSON.stringify(m));return 'ok:key'}
-  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);while(w.nextNode()){const n=w.currentNode;if(n.nodeValue.includes(findText)){n.nodeValue=n.nodeValue.replace(findText,newText);const r=JSON.parse(localStorage.getItem(KEY+'_repl')||'[]');r.push([findText,newText]);localStorage.setItem(KEY+'_repl',JSON.stringify(r));return 'ok:text'}}return 'not found'}
-;(function(){const r=JSON.parse(localStorage.getItem(KEY+'_repl')||'[]');for(const [a,b] of r){/* reapply */}})()
-
-// SLOT('OWNER','[MESSAGE OWNER] LUCAS')
-window.slot=function(name,value){const el=document.querySelector('[data-key="'+name+'"]');if(!el){return 'no slot'}el.textContent=value;const m=JSON.parse(localStorage.getItem(KEY)||'{}');m[name]=value;localStorage.setItem(KEY,JSON.stringify(m));return 'ok'}
+  const key='w0l0_identity';
+  function apply(){
+    const m=JSON.parse(localStorage.getItem(key)||'{}');
+    for(const k in m){
+      const el=document.querySelector('[data-key="'+k+'"]');
+      if(el) el.textContent=m[k];
+    }
+  }
+  window.set=function(k,v){
+    const m=JSON.parse(localStorage.getItem(key)||'{}');
+    m[k]=v; localStorage.setItem(key,JSON.stringify(m));
+    apply(); return 'ok';
+  }
+  window.reset=function(){ localStorage.removeItem(key); apply(); return 'cleared'; }
+  apply();
 </script>
 </body>
 </html>
