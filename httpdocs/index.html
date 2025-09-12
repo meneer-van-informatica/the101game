@@ -30,6 +30,7 @@
     <header>
       <div id="clock">--:--:--</div>
     </header>
+<div class='meter-wrap'><pre id='ascii30'>[##############################] 30</pre></div>
 
     <main>
       <div class="rule"></div>
@@ -57,5 +58,30 @@
     setTimeout(tick, 500);
   })();
   </script>
-</body>
+<script>
+/* ascii 30s bar */
+(function(){
+  const C = document.getElementById('clock');
+  const M = document.getElementById('ascii30');
+  const LEN = 30;                     // 30 segments, one per second of remaining time
+  function z(n){ return String(n).padStart(2,'0'); }
+  function step(){
+    const d = new Date();
+    // clock (HH:MM:SS)
+    if (C) C.textContent = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
+    // seconds within half-minute -> 1..30
+    const s = d.getSeconds();                         // 0..59
+    const within = (s===0 ? 30 : (s<=30 ? s : s-30)); // 1..30
+    const remaining = 30 - within;                    // 29..0 (visual count-down 30→00)
+    const fill = remaining;                           // 0..30 filled cells
+    if (M){
+      const bar = '[' + '#'.repeat(fill) + '-'.repeat(LEN-fill) + '] ' + z(remaining);
+      M.textContent = bar;
+    }
+    setTimeout(step, 200); // smooth enough, low power
+  }
+  step();
+})();
+</script></body>
 </html>
+
