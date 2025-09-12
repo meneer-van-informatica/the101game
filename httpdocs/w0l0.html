@@ -2,17 +2,18 @@
 <html lang="nl">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l0 · kiss+music (ramp)</title>
+<title>w0l0 · seconds drive the fall</title>
 <style>
-  :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:44px;--pad:8px}
+  :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:54px;--pad:10px}
   *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
-  .bar{position:fixed;top:0;left:0;right:0;height:var(--hbar);
-       padding:calc(env(safe-area-inset-top) + 0px) var(--pad) 0 var(--pad);
-       display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);
+  .bar{position:fixed;top:0;left:0;right:0;min-height:var(--hbar);
+       padding:calc(env(safe-area-inset-top) + 0px) var(--pad) 6px var(--pad);
+       display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);
        background:#000000e6;backdrop-filter:blur(2px);z-index:10}
-  .btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
-  .meter{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .btn{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
+  .meter{margin-left:auto;display:flex;align-items:center;gap:8px}
   .meter input{width:120px}
+  #clock{opacity:.9}
   #wrap{position:fixed;left:0;right:0;top:calc(var(--hbar) + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);padding:6px var(--pad)}
   #view{position:relative;width:100%;height:100%;border:1px dashed #444;overflow:hidden;
         background-image:
@@ -20,165 +21,187 @@
           repeating-linear-gradient(to bottom, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/400));}
   .blk{position:absolute;left:0;top:0;width:calc(100%/40);height:calc(100%/400);outline:1px solid #555;border-radius:2px}
   #legend{position:absolute;left:8px;right:8px;top:8px;height:6px;border-radius:3px;border:1px solid #333;opacity:.9;background:linear-gradient(90deg,hsl(0 90% 50%),hsl(120 90% 50%))}
+  /* autoplay gate */
+  #autoplay-gate{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.65);z-index:99999}
+  #autoplay-gate.show{display:grid}
+  #autoplay-gate .card{color:#eaeaea;background:#0b0b0bcc;border:1px solid #222;border-radius:12px;padding:14px 16px;text-align:center;max-width:320px}
+  #autoplay-gate .card b{display:block;margin-bottom:6px}
+  #autoplay-gate .tip{opacity:.8;font-size:.9em}
 </style>
 <body>
   <div class="bar">
     <a class="btn" href="/">← home</a>
     <button id="stop"  class="btn">stop</button>
     <button id="reset" class="btn">reset</button>
+    <span id="clock">-- -- ---- --:--:--</span>
     <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
   </div>
-  <div id="autoplay-gate" role="dialog" aria-modal="true">
-  <div class="card">
-    <b>tap to start sound</b>
-    <div class="tip">(volume bouwt van 0 → 100 tijdens eerste blok)</div>
+
+  <div id="wrap">
+    <section id="view" aria-label="tetris 40x400">
+      <div id="legend" aria-hidden="true"></div>
+    </section>
   </div>
-</div>
-<div id="wrap"><section id="view" aria-label="tetris 40x400"><div id="legend"></div></section></div>
+
+  <!-- autoplay gate overlay -->
+  <div id="autoplay-gate" role="dialog" aria-modal="true">
+    <div class="card">
+      <b>tap to start sound</b>
+      <div class="tip">(volume from 0 -> 100 during first block)</div>
+    </div>
+  </div>
 
 <script>
-/* ===== audio core (loud chain) ===== */
+/* ---------- lang sync ---------- */
+(function(){var L=localStorage.getItem('site_lang')||'en';document.documentElement.setAttribute('lang',L);})();
+
+/* ---------- clock dd mmmm yyyy HH:MM:SS ---------- */
+(function(){
+  const el=document.getElementById('clock');
+  function pad(n){return String(n).padStart(2,'0')}
+  function fmt(d){
+    const dd=pad(d.getDate());
+    const month=d.toLocaleString('nl-NL',{month:'long'});
+    const yyyy=d.getFullYear();
+    const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
+    return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
+  }
+  function tick(){ const now=new Date(); el.textContent=fmt(now); requestAnimationFrame(()=>{}); }
+  setInterval(tick, 250); tick();
+})();
+
+/* ---------- audio core (very loud chain) ---------- */
 let ac, comp, preGain, master, unlocked=false;
 function initAudio(){ if(ac) return;
   ac=new (window.AudioContext||window.webkitAudioContext)();
   preGain=ac.createGain(); preGain.gain.value=4.0;
   comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-  master=ac.createGain(); master.gain.value=0.0; // start stil
+  master=ac.createGain(); master.gain.value=0.0; // start stil (we rampen op eerste blok)
   preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
 }
-function unlockOnce(){ if(unlocked) return; initAudio(); (ac.resume?ac.resume():Promise.resolve()).finally(()=>{unlocked=true;['pointerdown','touchstart','keydown'].forEach(t=>document.removeEventListener(t,unlockOnce,true))})}
-['pointerdown','touchstart','keydown'].forEach(t=>document.addEventListener(t,unlockOnce,{capture:true,passive:true}));
+function setVolume(v=0){ initAudio(); const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; const el=document.getElementById('vol'); if(el) el.value=String(n); localStorage.setItem('w_audio_vol', String(n)); }
 
-// slider 0..100 -> master gain ~ 0..1.5 (met preamp is dit heel luid)
-function setVolume(v=0){ initAudio();
-  const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; // 100≈1.5
-  const el=document.getElementById('vol'); if(el) el.value=String(n);
-  localStorage.setItem('w_audio_vol', String(n));
+/* autoplay gate + index intent */
+(function(){
+  const gate=document.getElementById('autoplay-gate');
+  function showGate(){ gate && gate.classList.add('show') }
+  function hideGate(){ gate && gate.classList.remove('show') }
+  async function tryStartSilently(){
+    try{ initAudio(); setVolume(0); }catch(_){}
+    try{ if(ac && ac.state==='suspended') await ac.resume(); }catch(_){}
+    if(ac && ac.state==='running'){ hideGate(); return true }
+    showGate(); return false
+  }
+  function userUnlock(){
+    try{ initAudio(); ac && ac.resume && ac.resume(); }catch(_){}
+    hideGate();
+    window.removeEventListener('pointerdown', userUnlock, true);
+    window.removeEventListener('keydown', userUnlock, true);
+    gate && gate.removeEventListener('click', userUnlock);
+  }
+  window.addEventListener('pointerdown', userUnlock, true);
+  window.addEventListener('keydown', userUnlock, true);
+  gate && gate.addEventListener('click', userUnlock, {passive:true});
+
+  // prefer intent from index (within 8s)
+  function intentFresh(){ try{ const ts=parseInt(localStorage.getItem('w_audio_intent_ts')||'0',10); return ts && (Date.now()-ts)<8000 }catch(_){ return false } }
+  function tryFromIntent(){ if(!intentFresh()) return; try{ initAudio(); ac && ac.resume && ac.resume(); setVolume(0); }catch(_){} hideGate(); }
+
+  if (document.readyState==='complete'||document.readyState==='interactive'){ tryFromIntent(); tryStartSilently(); }
+  else document.addEventListener('DOMContentLoaded', ()=>{ tryFromIntent(); tryStartSilently(); }, {once:true});
+})();
+
+/* ---------- shared math ---------- */
+const W=40,H=400, SPAWN_MS=5000;
+function colorForX(x){ const h=120*(x/(W-1)); return `hsl(${h} 90% 50% / .65)`; }
+function freqForX(x){ const f0=261.63, span=24, semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
+
+/* seconds-driven fall time: 00 -> slow, 59 -> fast */
+const FALL_SLOW=3000, FALL_FAST=900; // ms
+function currentFallMs(){
+  const s=(new Date()).getSeconds(); // 0..59
+  const a=s/59; // 0..1
+  return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a;
 }
 
-/* ===== shared math (seeded rng, mapping) ===== */
-const W=40,H=400,FALL_MS=2400,SPAWN_MS=5000;
-function colorForX(x){ const h=120*(x/(W-1)); return `hsl(${h} 90% 50% / .65)`; }
-function freqForX(x){ const f0=261.63; const span=24; const semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
-// lcg rng
-function lcg(seed){ let s=seed>>>0; return ()=> (s=((s*1664525+1013904223)>>>0), s); }
-function pickX(rand, idx){ const r=rand(); return Math.floor((r/4294967295) * W); }
-// ticks & chord
-function fallTick(x,y){ initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime;
-  const f=freqForX(x)*(0.85+0.3*(y/H));
+/* ticks + chord */
+function fallTick(x,y){
+  initAudio(); if(ac.state==='suspended') ac.resume();
+  const t=ac.currentTime, f=freqForX(x)*(0.85+0.3*(y/H));
   const o=ac.createOscillator(), g=ac.createGain();
   o.type='square'; o.frequency.setValueAtTime(f,t);
   g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
   o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.08);
 }
-function playChordForX(x){ initAudio(); if(ac.state==='suspended') ac.resume(); const root=freqForX(x), t0=ac.currentTime+0.02;
+function playChordForX(x){
+  initAudio(); if(ac.state==='suspended') ac.resume();
+  const root=freqForX(x), t0=ac.currentTime+0.02;
   [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
     g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
-    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4); });
+    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4);
+  });
 }
 
-/* ===== visual fall with volume ramp on first block ===== */
-const view=document.getElementById('view'); let firstLanded=false;
-const seqStart = (localStorage.getItem('w_audio_seqStart')? Number(localStorage.getItem('w_audio_seqStart')) : Date.now());
-localStorage.setItem('w_audio_seqStart', String(seqStart));
-const rng = lcg(seqStart);
-localStorage.setItem('w_audio_seed', String(seqStart)); // zelfde waarde
-localStorage.setItem('w_audio_spawnMs', String(SPAWN_MS));
-localStorage.setItem('w_audio_fallMs',  String(FALL_MS));
+/* ---------- fall engine (delta-time; speed follows SS live) ---------- */
+const view=document.getElementById('view');
+let firstLanded=false;
 
-function spawnAndDrop(idx){
-  const x=pickX(rng, idx);
+function spawnAndDrop(){
+  const x=Math.floor(Math.random()*W);
   const blk=document.createElement('div'); blk.className='blk';
   blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=colorForX(x);
+  blk.style.outlineColor='rgba(0,0,0,.55)';
   view.appendChild(blk);
 
-  // chord bij spawn
   playChordForX(x);
 
-  const t0=performance.now(); const end=t0+FALL_MS;
-  let lastLine=-1;
+  let y=0;             // in grid rows (0..H)
+  let last=performance.now();
+  let lastTickRow=-1;
+
   function step(now){
-    const p = Math.min(1, (now - t0)/FALL_MS);
-    const y = p*H;
-    blk.style.top=(y*100/H)+'%';
+    const dt = now - last; last = now;
+    const fm = currentFallMs();                 // ms for full height at this moment (seconds-driven)
+    const vy = H / fm;                          // rows per ms
+    y += vy * dt;                               // integrate with delta-time
 
-    // ticks elke 12 rijen
-    const line = Math.floor(y/12);
-    if(line>lastLine){ lastLine=line; fallTick(x,y); }
-
-    // volume rampen tijdens eerste blok
+    // volume ramp on first block
     if(!firstLanded){
-      const vol = Math.round(p*100);
-      setVolume(vol);
+      const p = Math.max(0, Math.min(1, y/H));
+      setVolume(Math.round(p*100));
     }
 
-    if(now<end){ requestAnimationFrame(step); }
-    else{
+    // ticks every 12 rows
+    const phase = Math.floor(y/12);
+    if(phase>lastTickRow){ lastTickRow=phase; fallTick(x,y); }
+
+    blk.style.top=(Math.min(y,H-1)*100/H)+'%';
+
+    if(y>=H-1){
       if(!firstLanded){
         firstLanded=true;
         setVolume(100);
-        // flag voor w0l1 dat audio moet doorgaan
         localStorage.setItem('w_audio_continue','1');
-        setTimeout(()=>location.assign('/w0l1.html'),200);
+        // ga door naar w0l1 (visual), audio blijft spelen volgens dezelfde math daar
+        setTimeout(()=>location.assign('/w0l1.html'), 200);
       }
-      blk.remove();
+      blk.remove(); return;
     }
+    requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
-// controls
-document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=false; setVolume(0); spawnAndDrop(0); };
-document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue'); };
+/* ---------- controls ---------- */
+document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=false; setVolume(0); view.querySelectorAll('.blk').forEach(n=>n.remove()); spawnAndDrop();};
+document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue');};
 document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
 
-// start: volume 0, eerste spawn nu; daarna spawnen we wel door maar we gaan toch naar w0l1 bij eerste landing
+// start
 setVolume(0);
-spawnAndDrop(0);
+spawnAndDrop();
+// extra spawns elke 5s (je voelt het tempo per minuut veranderen)
+const spawner=setInterval(()=>{ if(!firstLanded) spawnAndDrop(); else clearInterval(spawner); }, 5000);
 </script>
-<script>
-/* autoplay gate */
-(function(){
-  const gate = document.getElementById('autoplay-gate');
-
-  async function tryStartSilently(){
-    // probeer direct: init + resume + vol=0
-    try{ initAudio(); setVolume?.(0); }catch(_){}
-    try{
-      if (ac && ac.state === 'suspended') await ac.resume();
-    }catch(_){}
-    // beslis
-    if (ac && ac.state === 'running'){
-      hideGate(); // succes → geen tik nodig
-      return true;
-    }
-    showGate();   // fallback: toon overlay
-    return false;
-  }
-
-  function showGate(){ gate?.classList.add('show'); }
-  function hideGate(){ gate?.classList.remove('show'); }
-
-  // eerste interactie overal → unlock + verberg gate
-  function userUnlock(){
-    try{ initAudio(); }catch(_){}
-    try{ ac && ac.resume && ac.resume(); }catch(_){}
-    hideGate();
-    window.removeEventListener('pointerdown', userUnlock, true);
-    window.removeEventListener('keydown', userUnlock, true);
-  }
-  window.addEventListener('pointerdown', userUnlock, true);
-  window.addEventListener('keydown',     userUnlock, true);
-  gate?.addEventListener('click', userUnlock, {passive:true});
-
-  // probeer meteen bij load (succès op desktop/engaged sites; mobiel/ios meestal niet)
-  if (document.readyState === 'complete' || document.readyState === 'interactive'){
-    tryStartSilently();
-  } else {
-    document.addEventListener('DOMContentLoaded', tryStartSilently, {once:true});
-  }
-})();
-</script></body>
+</body>
 </html>
-
-
