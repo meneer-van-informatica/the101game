@@ -2,7 +2,7 @@
 <html lang="nl">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l1 · team</title>
+<title>w0l1 · team (audio continues)</title>
 <style>
 :root{--bg:#000;--fg:#eaeaea;--line:#222;--pad:10px;--hbar:44px}
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.35 ui-monospace,consolas,monospace}
@@ -34,16 +34,8 @@
 
 <div id="wrap">
   <div class="card">
-    <div class="row">
-      <div class="label">name</div>
-      <input id="name" class="inp" inputmode="latin-name" autocomplete="off" placeholder="a–z" maxlength="32">
-      <small class="hint">letters a–z (lowercase)</small>
-    </div>
-    <div class="row">
-      <div class="label">age</div>
-      <input id="age" class="inp" inputmode="numeric" autocomplete="off" placeholder="0–9" maxlength="3">
-      <small class="hint">digits 0–9</small>
-    </div>
+    <div class="row"><div class="label">name</div><input id="name" class="inp" placeholder="a–z" maxlength="32"></div>
+    <div class="row"><div class="label">age</div><input id="age"  class="inp" placeholder="0–9" maxlength="3"></div>
     <div class="row">
       <div class="label">gender</div>
       <div class="genders">
@@ -52,87 +44,100 @@
         <button type="button" class="btn g" data-g="v">v</button>
       </div>
       <input id="gender" class="inp" style="max-width:60px;text-align:center" placeholder="m/o/v" maxlength="1">
-      <small class="hint">type m, o of v · or click</small>
     </div>
   </div>
 
   <div class="card" id="kbwrap">
-    <div class="row" style="justify-content:space-between">
-      <div><b>click or type</b></div>
-      <small class="hint">active field: <span id="active">name</span></small>
-    </div>
+    <div class="row" style="justify-content:space-between"><div><b>click or type</b></div><small class="hint">active field: <span id="active">name</span></small></div>
     <div class="kb" id="kb"></div>
     <div class="row list" id="team"></div>
   </div>
 </div>
 
 <script>
-(function(){
-  // el refs
-  const el = (id)=>document.getElementById(id);
-  const name = el('name'), age = el('age'), gender = el('gender');
-  const activeLbl = el('active'), teamBox = el('team');
-  let active = name; name.focus();
+/* ===== continue audio from w0l0 (no visual), vol fixed at 100 ===== */
+let ac, comp, preGain, master, unlocked=false;
+function initAudio(){ if(ac) return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  preGain=ac.createGain(); preGain.gain.value=4.0;
+  comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+  master=ac.createGain(); master.gain.value=1.5; // ≈ 100
+  preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
+}
+function unlockOnce(){ if(unlocked) return; initAudio(); (ac.resume?ac.resume():Promise.resolve()).finally(()=>{unlocked=true;['pointerdown','touchstart','keydown'].forEach(t=>document.removeEventListener(t,unlockOnce,true))})}
+['pointerdown','touchstart','keydown'].forEach(t=>document.addEventListener(t,unlockOnce,{capture:true,passive:true}));
 
-  // allowed sets
-  const AZ = Array.from('abcdefghijklmnopqrstuvwxyz');
-  const D9 = Array.from('0123456789');
-  const G3 = ['m','o','v'];
+// same math
+const W=40,H=400,FALL_MS=parseInt(localStorage.getItem('w_audio_fallMs')||'2400',10),
+      SPAWN_MS=parseInt(localStorage.getItem('w_audio_spawnMs')||'5000',10);
+function colorForX(x){ const h=120*(x/(W-1)); return `hsl(${h} 90% 50% / .65)`; }
+function freqForX(x){ const f0=261.63; const span=24; const semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
+function fallTick(x,y){ initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime;
+  const f=freqForX(x)*(0.85+0.3*(y/H));
+  const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.setValueAtTime(f,t);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
+  o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.08);
+}
+function playChordForX(x){ initAudio(); if(ac.state==='suspended') ac.resume(); const root=freqForX(x), t0=ac.currentTime+0.02;
+  [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
+    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
+    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4); });
+}
+// lcg
+function lcg(seed){ let s=seed>>>0; return ()=> (s=((s*1664525+1013904223)>>>0), s); }
+function pickX(rand){ const r=rand(); return Math.floor((r/4294967295) * W); }
 
-  // enforce rules
-  function cleanName(){ name.value = (name.value||'').toLowerCase().replace(/[^a-z]/g,''); }
-  function cleanAge(){ age.value  = (age.value||'').replace(/[^0-9]/g,'').slice(0,3); }
-  function cleanGender(){ gender.value = (gender.value||'').toLowerCase().replace(/[^mov]/g,'').slice(0,1); }
-  name.addEventListener('input', cleanName);
-  age.addEventListener('input', cleanAge);
-  gender.addEventListener('input', cleanGender);
+(function continueAudio(){
+  if(localStorage.getItem('w_audio_continue')!=='1') return; // alleen als we van w0l0 komen
+  const seqStart = parseInt(localStorage.getItem('w_audio_seqStart')||String(Date.now()),10);
+  const seed = parseInt(localStorage.getItem('w_audio_seed')||String(seqStart),10);
+  const rng = lcg(seed);
 
-  // focus tracking
-  [name,age,gender].forEach(i=>i.addEventListener('focus', ()=>{ active=i; activeLbl.textContent=i.id }));
+  // skip rng vooruit tot huidige blokindex
+  const elapsed = Date.now()-seqStart;
+  let idx = Math.floor(elapsed/SPAWN_MS);
+  for(let i=0;i<idx;i++) rng(); // consume
 
-  // on-screen keyboard
-  const kb = el('kb');
-  const keys = [...AZ, ...D9, '⌫'];
-  kb.innerHTML = keys.map(k=>`<button type="button" data-k="${k}">${k}</button>`).join('');
-  kb.addEventListener('click', (e)=>{
-    const k = e.target?.dataset?.k;
-    if(!k) return;
-    if(k==='⌫'){ active.value = (active.value||'').slice(0,-1); active.dispatchEvent(new Event('input')); return; }
-    if(active===name && AZ.includes(k)){ active.value += k; }
-    else if(active===age && D9.includes(k)){ active.value += k; }
-    active.dispatchEvent(new Event('input'));
-    active.focus();
-  });
+  let x = pickX(rng);
+  let blockStart = seqStart + idx*SPAWN_MS;
 
-  // key typing: filter live
-  window.addEventListener('keydown', (e)=>{
-    const key = e.key.toLowerCase();
-    if(active===name && !AZ.includes(key) && key!=='backspace' && key.length===1){ e.preventDefault(); }
-    if(active===age && !D9.includes(key) && key!=='backspace' && key.length===1){ e.preventDefault(); }
-    if(active===gender && !G3.includes(key) && key!=='backspace'){ e.preventDefault(); }
-    if(active===gender && G3.includes(key)){ gender.value = key; e.preventDefault(); }
-  });
-
-  // gender buttons
-  document.querySelectorAll('.g').forEach(b=>b.addEventListener('click', ()=>{ gender.value = b.dataset.g; gender.focus(); }));
-
-  // save / clear
-  function load(){ try{ return JSON.parse(localStorage.getItem('team_members')||'[]') }catch(_){ return [] } }
-  function save(arr){ localStorage.setItem('team_members', JSON.stringify(arr)) }
-  function render(){
-    const t = load();
-    teamBox.innerHTML = t.map(m=>`<span class="badge">${m.name} · ${m.age} · ${m.gender}</span>`).join('');
+  function loop(){
+    const now = Date.now();
+    // nieuwe blok?
+    if(now >= blockStart + SPAWN_MS){
+      idx++; x = pickX(rng); blockStart += SPAWN_MS; playChordForX(x);
+    }
+    // valfase binnen huidige blok
+    const tIn = Math.max(0, Math.min(FALL_MS, now - blockStart));
+    const y   = (tIn / FALL_MS) * H;
+    // tick per ~12 rijen: gebruik modulo-drempel
+    const step = 12, phase = Math.floor(y/step);
+    if (!loop._last || phase>loop._last){ loop._last = phase; fallTick(x,y); }
+    requestAnimationFrame(loop);
   }
-  el('save').addEventListener('click', ()=>{
-    cleanName(); cleanAge(); cleanGender();
-    const nm=name.value, ag=age.value, gd=gender.value;
-    if(!nm || !ag || !G3.includes(gd)) { alert('fill: name(a–z), age(0–9), gender(m/o/v)'); return; }
-    const t=load(); t.push({name:nm, age:parseInt(ag,10), gender:gd, ts:Date.now()}); save(t); render();
-    name.value=''; age.value=''; gender.value=''; name.focus(); active=name; activeLbl.textContent='name';
-  });
-  el('clear').addEventListener('click', ()=>{ localStorage.removeItem('team_members'); render(); });
+  playChordForX(x);
+  loop();
+})();
+</script>
 
-  // boot
+<!-- team ui (zoals eerder) -->
+<script>
+(function(){
+  const el=(id)=>document.getElementById(id), name=el('name'), age=el('age'), gender=el('gender'),
+        activeLbl=el('active')||{textContent:''}, teamBox=document.getElementById('team');
+  const AZ=[...'abcdefghijklmnopqrstuvwxyz'], D9=[...'0123456789'], G3=['m','o','v'];
+  function cleanName(){ name.value=(name.value||'').toLowerCase().replace(/[^a-z]/g,''); }
+  function cleanAge(){ age.value=(age.value||'').replace(/[^0-9]/g,'').slice(0,3); }
+  function cleanGender(){ gender.value=(gender.value||'').toLowerCase().replace(/[^mov]/g,'').slice(0,1); }
+  name?.addEventListener('input',cleanName); age?.addEventListener('input',cleanAge); gender?.addEventListener('input',cleanGender);
+  document.querySelectorAll('.g').forEach(b=>b.addEventListener('click',()=>{ gender.value=b.dataset.g; gender.focus(); }));
+  function load(){ try{return JSON.parse(localStorage.getItem('team_members')||'[]')}catch(_){return[]} }
+  function save(a){ localStorage.setItem('team_members', JSON.stringify(a)) }
+  function render(){ const t=load(); if(teamBox) teamBox.innerHTML=t.map(m=>`<span class="badge">${m.name} · ${m.age} · ${m.gender}</span>`).join(''); }
+  document.getElementById('save')?.addEventListener('click',()=>{ cleanName(); cleanAge(); cleanGender();
+    const nm=name?.value, ag=age?.value, gd=gender?.value; if(!nm||!ag||!G3.includes(gd)){ alert('fill: name a–z, age 0–9, gender m/o/v'); return; }
+    const t=load(); t.push({name:nm,age:parseInt(ag,10),gender:gd,ts:Date.now()}); save(t); render(); if(name) name.value=''; if(age) age.value=''; if(gender) gender.value=''; });
+  document.getElementById('clear')?.addEventListener('click',()=>{ localStorage.removeItem('team_members'); render(); });
   render();
 })();
 </script>

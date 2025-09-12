@@ -2,7 +2,7 @@
 <html lang="nl">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l0 · kiss+music</title>
+<title>w0l0 · kiss+music (ramp)</title>
 <style>
   :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--hbar:44px;--pad:8px}
   *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
@@ -19,114 +19,116 @@
           repeating-linear-gradient(to right, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/40)),
           repeating-linear-gradient(to bottom, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/400));}
   .blk{position:absolute;left:0;top:0;width:calc(100%/40);height:calc(100%/400);outline:1px solid #555;border-radius:2px}
-  /* kleine legenda: rood → groen */
-  #legend{position:absolute;left:8px;right:8px;top:8px;height:6px;border-radius:3px;border:1px solid #333;opacity:.9}
-  #legend{background:linear-gradient(90deg,hsl(0 90% 50%),hsl(120 90% 50%))}
+  #legend{position:absolute;left:8px;right:8px;top:8px;height:6px;border-radius:3px;border:1px solid #333;opacity:.9;background:linear-gradient(90deg,hsl(0 90% 50%),hsl(120 90% 50%))}
 </style>
 <body>
   <div class="bar">
     <a class="btn" href="/">← home</a>
     <button id="stop"  class="btn">stop</button>
     <button id="reset" class="btn">reset</button>
-    <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="1000" step="10" value="1000"></div>
+    <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
   </div>
-
-  <div id="wrap">
-    <section id="view" aria-label="tetris 40x400">
-      <div id="legend" aria-hidden="true"></div>
-    </section>
-  </div>
+  <div id="wrap"><section id="view" aria-label="tetris 40x400"><div id="legend"></div></section></div>
 
 <script>
-/* ===== audio (very loud; default 1000) ===== */
+/* ===== audio core (loud chain) ===== */
 let ac, comp, preGain, master, unlocked=false;
-function initAudio(){
-  if(ac) return;
-  ac = new (window.AudioContext||window.webkitAudioContext)();
-  preGain = ac.createGain(); preGain.gain.value = 4.0; // preamp
-  comp = ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-  master = ac.createGain(); master.gain.value=1.0;
+function initAudio(){ if(ac) return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  preGain=ac.createGain(); preGain.gain.value=4.0;
+  comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+  master=ac.createGain(); master.gain.value=0.0; // start stil
   preGain.connect(comp); comp.connect(master); master.connect(ac.destination);
 }
 function unlockOnce(){ if(unlocked) return; initAudio(); (ac.resume?ac.resume():Promise.resolve()).finally(()=>{unlocked=true;['pointerdown','touchstart','keydown'].forEach(t=>document.removeEventListener(t,unlockOnce,true))})}
 ['pointerdown','touchstart','keydown'].forEach(t=>document.addEventListener(t,unlockOnce,{capture:true,passive:true}));
-function setVolume(v=1000){ initAudio(); const g=Math.max(0,Math.min(1000,Number(v))); master.gain.value=g/666; localStorage.setItem('w0l0_volume',String(v)); }
-(function(){ setVolume(parseInt(localStorage.getItem('w0l0_volume')||'1000',10)); })();
 
-/* mapping: kolom -> kleur & toon */
-const W=40,H=400;
-function colorForX(x){ const h = 0 + (120*(x/(W-1))); return `hsl(${h} 90% 50% / .65)`; }
-function freqForX(x){ // 2 octaven schaal ~ C4..C6 (ongeveer)
-  const f0=261.63; const span=24; const semi = (x/(W-1))*span; return f0*Math.pow(2, semi/12);
+// slider 0..100 -> master gain ~ 0..1.5 (met preamp is dit heel luid)
+function setVolume(v=0){ initAudio();
+  const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; // 100≈1.5
+  const el=document.getElementById('vol'); if(el) el.value=String(n);
+  localStorage.setItem('w_audio_vol', String(n));
 }
-/* korte tick tijdens val met pitch op basis van y en x */
-function fallTick(x,y){
-  initAudio(); if(ac.state==='suspended') ac.resume();
-  const t=ac.currentTime;
-  const f = freqForX(x)*(0.85 + 0.3*(y/H)); // stijgt iets tijdens vallen
+
+/* ===== shared math (seeded rng, mapping) ===== */
+const W=40,H=400,FALL_MS=2400,SPAWN_MS=5000;
+function colorForX(x){ const h=120*(x/(W-1)); return `hsl(${h} 90% 50% / .65)`; }
+function freqForX(x){ const f0=261.63; const span=24; const semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
+// lcg rng
+function lcg(seed){ let s=seed>>>0; return ()=> (s=((s*1664525+1013904223)>>>0), s); }
+function pickX(rand, idx){ const r=rand(); return Math.floor((r/4294967295) * W); }
+// ticks & chord
+function fallTick(x,y){ initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime;
+  const f=freqForX(x)*(0.85+0.3*(y/H));
   const o=ac.createOscillator(), g=ac.createGain();
   o.type='square'; o.frequency.setValueAtTime(f,t);
   g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
   o.connect(g); g.connect(preGain); o.start(t); o.stop(t+0.08);
 }
-/* triad-chord op spawn o.b.v. positie */
-function playChordForX(x){
-  initAudio(); if(ac.state==='suspended') ac.resume();
-  const root=freqForX(x);
-  const tones=[root, root*Math.pow(2,4/12), root*Math.pow(2,7/12)]; // majeur triad
-  const t0=ac.currentTime+0.02;
-  tones.forEach((f,i)=>{
-    const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle';
+function playChordForX(x){ initAudio(); if(ac.state==='suspended') ac.resume(); const root=freqForX(x), t0=ac.currentTime+0.02;
+  [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
     g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
-    o.frequency.value=f; o.connect(g); g.connect(preGain); o.start(t0+i*0.005); o.stop(t0+0.4);
-  });
+    o.connect(g); g.connect(preGain); o.start(t0+k*0.004); o.stop(t0+0.4); });
 }
 
-/* ===== kiss fall: sneller; auto-spawn elke 5s; eerste land -> nav ===== */
-const view=document.getElementById('view');
-let firstLanded=false;
-function spawnAndDrop(){
+/* ===== visual fall with volume ramp on first block ===== */
+const view=document.getElementById('view'); let firstLanded=false;
+const seqStart = (localStorage.getItem('w_audio_seqStart')? Number(localStorage.getItem('w_audio_seqStart')) : Date.now());
+localStorage.setItem('w_audio_seqStart', String(seqStart));
+const rng = lcg(seqStart);
+localStorage.setItem('w_audio_seed', String(seqStart)); // zelfde waarde
+localStorage.setItem('w_audio_spawnMs', String(SPAWN_MS));
+localStorage.setItem('w_audio_fallMs',  String(FALL_MS));
+
+function spawnAndDrop(idx){
+  const x=pickX(rng, idx);
   const blk=document.createElement('div'); blk.className='blk';
-  const x=Math.floor(Math.random()*W);
-  blk.style.left=(x*100/W)+'%'; blk.style.top='0%';
-  blk.style.background=colorForX(x);
-  blk.style.outlineColor='rgba(0,0,0,.55)';
+  blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=colorForX(x);
   view.appendChild(blk);
 
-  playChordForX(x); // chord bij spawn
+  // chord bij spawn
+  playChordForX(x);
 
-  let y=0, vy=0.9; // sneller
-  let lastBeep=0;
-  const step=(ts)=>{
-    if(!document.body.contains(blk)) return;
-    y += vy;
-    if (y - lastBeep >= 12) { // elke ~12 rijen een korte tick
-      lastBeep = y;
-      fallTick(x,y);
-    }
+  const t0=performance.now(); const end=t0+FALL_MS;
+  let lastLine=-1;
+  function step(now){
+    const p = Math.min(1, (now - t0)/FALL_MS);
+    const y = p*H;
     blk.style.top=(y*100/H)+'%';
-    if(y>=H-1){
-      // land
+
+    // ticks elke 12 rijen
+    const line = Math.floor(y/12);
+    if(line>lastLine){ lastLine=line; fallTick(x,y); }
+
+    // volume rampen tijdens eerste blok
+    if(!firstLanded){
+      const vol = Math.round(p*100);
+      setVolume(vol);
+    }
+
+    if(now<end){ requestAnimationFrame(step); }
+    else{
       if(!firstLanded){
         firstLanded=true;
-        setTimeout(()=>location.assign('/w0l1.html'), 250);
+        setVolume(100);
+        // flag voor w0l1 dat audio moet doorgaan
+        localStorage.setItem('w_audio_continue','1');
+        setTimeout(()=>location.assign('/w0l1.html'),200);
       }
       blk.remove();
-      return;
     }
-    requestAnimationFrame(step);
-  };
+  }
   requestAnimationFrame(step);
 }
 
 // controls
-document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=false; view.querySelectorAll('.blk').forEach(n=>n.remove()); spawnAndDrop();};
-document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}};
+document.getElementById('reset').onclick=(e)=>{e.preventDefault(); firstLanded=false; setVolume(0); spawnAndDrop(0); };
+document.getElementById('stop').onclick=(e)=>{e.preventDefault(); try{ac&&ac.close()}catch(_){}; localStorage.removeItem('w_audio_continue'); };
 document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
 
-// start: spawn nu + om de 5s
-spawnAndDrop();
-const spawner = setInterval(()=>{ if(!firstLanded) spawnAndDrop(); else clearInterval(spawner); }, 5000);
+// start: volume 0, eerste spawn nu; daarna spawnen we wel door maar we gaan toch naar w0l1 bij eerste landing
+setVolume(0);
+spawnAndDrop(0);
 </script>
 </body>
 </html>
