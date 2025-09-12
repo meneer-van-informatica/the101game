@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<!--
+# index.html - TODO 0 - DESC: wireframe + klok + ASCII 30s balk
+# index.html - TODO 1 - DESC: universal footer laden uit /specs/footer.spec
+# index.html - TODO 2 - DESC: KPIs hydrateren: block=0, kukel=0, lang=EN
+# index.html - TODO 3 - DESC: language toggle (EN/nl) zet localStorage: site_lang
+# index.html - TODO 4 - DESC: tik/tok audio (1Hz) met user-gesture unlock
+# index.html - TODO 5 - DESC: ASCII balk schaal met viewport-breedte
+# index.html - TODO 6 - DESC: lichte B/W mobile-first styling (geen externe fonts)
+# index.html - TODO 7 - DESC: herlaadbaar: footer elke refresh opnieuw fetchen
+# index.html - TODO 8 - DESC: toegankelijk: buttons met aria-labels & focus-styling
+# index.html - TODO 9 - DESC: geen navigatie; index is GENESIS (0 kukel)
+# index.html - TODO 10 - DESC: code idempotent & compact houden
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>index · wireframe</title>
+<style>
+  :root{ --w:min(100vw,420px); --bg:#000; --fg:#fff; --line:#fff }
+  *{ box-sizing:border-box }
+  html,body{ margin:0; background:#000; color:#fff; font:16px/1.3 ui-monospace,consolas,monospace }
+  #phone{ width:var(--w); min-height:100dvh; margin:0 auto; display:flex; flex-direction:column; padding:12px }
+  header{ display:flex; justify-content:center; padding:8px 0 10px }
+  #clock{ padding:6px 10px; border:1px solid var(--line); border-radius:8px; min-width:60%; text-align:center }
+  #ascii-wrap{ padding:8px 0 0 }
+  #ascii30{ margin:0; white-space:pre; text-align:center }
+  main{ flex:1; display:grid; gap:10px; align-content:start; padding:12px 0 }
+  .row{ display:flex; gap:10px; justify-content:center }
+  .btn{ padding:.6rem .8rem; border:1px solid var(--line); background:#000; color:#fff; border-radius:10px; cursor:pointer }
+  .btn:focus{ outline:2px solid #fff }
+  footer{ margin-top:auto }
+</style>
+<body>
+  <div id="phone">
+    <header><div id="clock">--:--:--</div></header>
+    <div id="ascii-wrap"><pre id="ascii30">[##############################] 30</pre></div>
+
+    <main>
+      <div class="row" aria-label="language toggle">
+        <button id="btn-en" class="btn" aria-label="set language English">CASE 0: ENGLISH</button>
+        <button id="btn-nl" class="btn" aria-label="set language Dutch">case 1: nederlands</button>
+      </div>
+    </main>
+
+    <footer id="universal-footer"></footer>
+  </div>
+
+<script>
+/* clk + ascii (30→00), viewport-width */
+(function(){
+  const C = document.getElementById('clock');
+  const M = document.getElementById('ascii30');
+  function z(n){ return String(n).padStart(2,'0'); }
+  function barLen(){ const w=Math.max(320, (window.innerWidth||320)); return Math.max(30, Math.floor((w-40)/8)); }
+  let LEN = barLen(); addEventListener('resize', ()=>{ LEN = barLen(); }, {passive:true});
+
+  function step(){
+    const d = new Date();
+    if (C) C.textContent = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
+    const s = d.getSeconds();                  // 0..59
+    const within = (s===0 ? 30 : (s<=30 ? s : s-30)); // 1..30
+    const remaining = 30 - within;             // 29..0 (visual 30→00)
+    const fill = Math.round((remaining/30)*LEN);
+    if (M){
+      const left  = '#'.repeat(fill);
+      const right = '-'.repeat(Math.max(0, LEN-fill));
+      M.textContent = '['+left+right+'] '+z(remaining);
+    }
+    setTimeout(step, 200);
+  }
+  step();
+})();
+</script>
+
+<script>
+/* language toggle (persist) */
+(function(){
+  function setLang(lang){
+    try{ localStorage.setItem('site_lang', lang); }catch(_){}
+    // reflect case style on buttons themselves:
+    const en = document.getElementById('btn-en'), nl=document.getElementById('btn-nl');
+    if (en && nl){
+      en.textContent = (lang==='en'?'CASE 0: ENGLISH':'case 0: english');
+      nl.textContent = (lang==='en'?'CASE 1: NEDERLANDS':'case 1: nederlands');
+    }
+  }
+  document.getElementById('btn-en')?.addEventListener('click', ()=>setLang('en'));
+  document.getElementById('btn-nl')?.addEventListener('click', ()=>setLang('nl'));
+  // init default (GENESIS spec: EN)
+  setLang(localStorage.getItem('site_lang')||'en');
+})();
+</script>
+
+<script>
+/* tik/tok audio 1Hz (needs one gesture to unlock) */
+(function(){
+  let ac, pre, comp, master, flip=0;
+  function init(){ if(ac) return;
+    const C = window.AudioContext||window.webkitAudioContext; if(!C) return;
+    ac=new C(); pre=ac.createGain(); pre.gain.value=3.2;
+    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=12; comp.ratio.value=12; comp.attack.value=0.003; comp.release.value=0.2;
+    master=ac.createGain(); master.gain.value=0.18;
+    pre.connect(comp); comp.connect(master); master.connect(ac.destination);
+  }
+  async function prime(){ try{ init(); if(ac && ac.state==='suspended') await ac.resume(); }catch(_){ } }
+  function tone(f,t,d){
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type='square'; o.frequency.value=f;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.9,t+.005); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(g); g.connect(pre); o.start(t); o.stop(t+d+.02);
+  }
+  function tick(){ if(!ac) return; const t=ac.currentTime+.01; tone(1500,t,0.05); }
+  function tock(){ if(!ac) return; const t=ac.currentTime+.01; tone(900 ,t,0.06); }
+  function loop(){
+    if(ac){ (flip^=1) ? tick() : tock(); }
+    setTimeout(loop, 1000);
+  }
+  addEventListener('pointerdown', ()=>prime(), {once:true,capture:true});
+  addEventListener('keydown',     ()=>prime(), {once:true,capture:true});
+  loop();
+})();
+</script>
+
+<script>
+/* universal footer loader + KPI hydrate (index = block 0, kukel 0, lang EN) */
+(function(){
+  const mount='universal-footer';
+  function block(){ return 0; }
+  function kukel(){ return 0; }
+  function lang(){ return 'EN'; } // GENESIS spec
+  async function load(){
+    const el = document.getElementById(mount); if(!el) return;
+    try{
+      const r = await fetch('/specs/footer.spec?v='+Date.now(), {cache:'no-store'});
+      el.innerHTML = await r.text();
+    }catch(_){ el.innerHTML = '<div style="padding:12px;text-align:center;border-top:1px dashed #fff">footer unavailable</div>'; }
+    hydrate();
+  }
+  function q(sel){ return document.getElementById(mount)?.querySelector(sel); }
+  function hydrate(){
+    if (q('[data-block]')) q('[data-block]').textContent = String(block());
+    if (q('[data-kukel]')) q('[data-kukel]').textContent = String(kukel());
+    if (q('[data-lang]'))  q('[data-lang]').textContent  = lang();
+    if (q('[data-ts]'))    q('[data-ts]').textContent    = new Date().toISOString();
+  }
+  (document.readyState==='loading')?document.addEventListener('DOMContentLoaded',load,{once:true}):load();
+})();
+</script>
+</body>
+</html>

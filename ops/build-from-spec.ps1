@@ -1,0 +1,373 @@
+﻿# build-from-spec.ps1 â€" maak .spec files, render index.html en w0l0.html, commit + push
+$ErrorActionPreference = 'Stop'
+Set-Location 'E:\the101game'
+
+# -----------------------
+# 0) helpers
+# -----------------------
+function Ensure-Folder([string]$path){
+  if(-not (Test-Path $path)){ New-Item -ItemType Directory -Force -Path $path | Out-Null }
+}
+
+function Read-Spec([string]$specPath){
+  if(-not (Test-Path $specPath)){ return @{ Raw = ''; Todos = @() } }
+  $raw = Get-Content $specPath -Raw
+  # Parse TODO headers: "# TODO N - DESC: ..."
+  $todos = @()
+  $pattern = '(?ms)^#\s*TODO\s+(\d+)\s*-\s*DESC:\s*(.*?)\r?\n(.*?)(?=^#\s*TODO\s+\d+\s*-|$)'
+  $matches = [System.Text.RegularExpressions.Regex]::Matches($raw, $pattern)
+  foreach($m in $matches){
+    $todos += [pscustomobject]@{
+      N     = [int]$m.Groups[1].Value
+      DESC  = $m.Groups[2].Value.Trim()
+      Block = $m.Groups[3].Value.Trim()
+    }
+  }
+  return @{ Raw = $raw; Todos = $todos }
+}
+
+function Html-Escape([string]$s){
+  if($null -eq $s){ return '' }
+  return ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;')
+}
+
+# -----------------------
+# 1) specs aanmaken
+# -----------------------
+Ensure-Folder 'specs'
+
+# -- template.spec (uitleg & format) --
+@'
+# template.spec â€" SPEC FORMAT
+
+# TODO 0 - DESC: korte commit-omschrijving
+Constraints:
+- zwart/wit, mobile-first, geen externe fonts
+UI:
+- klok boven, ASCII-balk op phone-width
+Audio:
+- tik/tok elke beat
+Timer:
+- 30s, ASCII 30â†'00, restart elke 30s
+Data:
+- schrijf LMW-block in localStorage
+Routes:
+- na 10s â†' /w0l0.html
+Acceptance:
+- klok tikt, balk telt 30â†'00, tik/tok hoorbaar
+- localStorage bevat the101game_chain met LMW-block
+- route naar /w0l0.html werkt
+
+# TODO 1 - DESC: (volgende taak)
+Constraints:
+- ...
+UI:
+- ...
+Audio:
+- ...
+Timer:
+- ...
+Data:
+- ...
+Routes:
+- ...
+Acceptance:
+- ...
+'@ | Set-Content -Encoding UTF8 'specs\template.spec'
+
+# -- index.spec (voorbeeld) --
+@'
+# index.spec â€" voorbeeld
+
+# TODO 0 - DESC: baseline wireframe + klok + ASCII 30s + tik/tok + route
+Constraints:
+- zwart/wit, mobile-first, geen externe fonts
+UI:
+- klok boven, ASCII-balk onder header
+Audio:
+- tik/tok elke beat (snareachtig)
+Timer:
+- 30s, ASCII 30â†'00, restart elke 30s
+Data:
+- schrijf LMW-block (pageWorth=0) in localStorage (the101game_chain)
+Routes:
+- na 10s â†' /w0l0.html
+Acceptance:
+- klok loopt
+- ASCII-balk vult full width binnen phone
+- tik/tok hoorbaar (na user gesture)
+- blockchain groeit
+- automatische route werkt
+
+# TODO 1 - DESC: (placeholder)
+Constraints:
+- 
+UI:
+- 
+Audio:
+- 
+Timer:
+- 
+Data:
+- 
+Routes:
+- 
+Acceptance:
+- 
+
+# TODO 2 - DESC: (placeholder)
+# TODO 3 - DESC: (placeholder)
+# TODO 4 - DESC: (placeholder)
+# TODO 5 - DESC: (placeholder)
+# TODO 6 - DESC: (placeholder)
+# TODO 7 - DESC: (placeholder)
+# TODO 8 - DESC: (placeholder)
+# TODO 9 - DESC: (placeholder)
+# TODO 10 - DESC: (placeholder)
+'@ | Set-Content -Encoding UTF8 'specs\index.spec'
+
+# -- w0l0.spec (voorbeeld) --
+@'
+# w0l0.spec â€" voorbeeld
+
+# TODO 0 - DESC: HELLO/HALLO + 10s bounce terug + LMW-block (worth=1)
+Constraints:
+- zwart/wit, mobile-first
+UI:
+- grote heading: "HELLO" (en) of "hallo" (nl) op basis van site_lang
+Audio:
+- zacht chime bij load (na gesture)
+Timer:
+- 10s bounce terug naar /index.html
+Data:
+- append LMW-block met pageWorth=1
+Routes:
+- na 10s â†' /index.html
+Acceptance:
+- tekst taalafhankelijk
+- blockchain groeit
+- bounce werkt
+
+# TODO 1 - DESC: (placeholder)
+# TODO 2 - DESC: (placeholder)
+# TODO 3 - DESC: (placeholder)
+# TODO 4 - DESC: (placeholder)
+# TODO 5 - DESC: (placeholder)
+# TODO 6 - DESC: (placeholder)
+# TODO 7 - DESC: (placeholder)
+# TODO 8 - DESC: (placeholder)
+# TODO 9 - DESC: (placeholder)
+# TODO 10 - DESC: (placeholder)
+'@ | Set-Content -Encoding UTF8 'specs\w0l0.spec'
+
+git add specs\template.spec, specs\index.spec, specs\w0l0.spec | Out-Null
+
+# -----------------------
+# 2) simple renderers
+# -----------------------
+
+function New-IndexHtml([string]$specRaw){
+  @'
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>index Â· wireframe</title>
+<style>
+  :root{ --w:min(100vw,420px); --bg:#000; --fg:#fff; --line:#fff }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#000;color:#fff;font:16px/1.35 ui-monospace,consolas,monospace}
+  #phone{width:var(--w);min-height:100dvh;margin:0 auto;display:flex;flex-direction:column;padding:12px}
+  header{padding:4px 0 12px 0;display:flex;justify-content:center}
+  #clock{padding:6px 10px;border:1px solid var(--line);border-radius:8px;min-width:60%;text-align:center}
+  .meter-wrap{width:100%;margin:12px 0 0 0}
+  #ascii30{display:block;width:100%;margin:0;padding:6px 10px;border:1px solid #fff;border-radius:8px;white-space:pre;background:#000;color:#fff}
+  footer{padding:20px 0 calc(env(safe-area-inset-bottom) + 10px) 0;display:grid;gap:12px;place-items:center}
+  .dots{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+  .dot{width:64px;height:64px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center}
+  .dot.black{background:#000;color:#fff}
+  .dot.white{background:#fff;color:#000}
+</style>
+<body>
+  <div id="phone">
+    <header><div id="clock">--:--:--</div></header>
+    <div class="meter-wrap"><pre id="ascii30">[##############################] 30</pre></div>
+    <div style="flex:1"></div>
+    <footer>
+      <div class="dots">
+        <div class="dot black"><b>â—</b></div>
+        <div class="dot white">â—‹</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- clock + ASCII 30s + tik/tok + route + blockchain -->
+  <script>
+  (function(){
+    var C=document.getElementById('clock');
+    var M=document.getElementById('ascii30');
+
+    function z(n){return String(n).padStart(2,'0')}
+    function lenFor(el){ try{
+      var w=(el&&el.clientWidth)?el.clientWidth:(document.getElementById('phone')?.clientWidth||360);
+      return Math.max(30, Math.floor((w - 32)/8));
+    }catch(_){return 30}}
+    var LEN=lenFor(M);
+    window.addEventListener('resize', ()=>{ LEN=lenFor(M); }, {passive:true});
+
+    // audio: tik/tok (user gesture unlock)
+    let ac,pre,comp,master,nextTick=0; 
+    function initAudio(){ if(ac) return; const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
+      ac=new Ctx(); pre=ac.createGain(); pre.gain.value=3.5;
+      comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=12; comp.ratio.value=12; comp.attack.value=0.003; comp.release.value=0.20;
+      master=ac.createGain(); master.gain.value=0.22; pre.connect(comp); comp.connect(master); master.connect(ac.destination);
+    }
+    async function prime(){ try{ initAudio(); if(ac&&ac.state==='suspended') await ac.resume(); }catch(_){ } }
+    function tone(f,t,d){ if(!ac) return; const o=ac.createOscillator(), g=ac.createGain();
+      o.type='square'; o.frequency.setValueAtTime(f,t); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.9,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+      o.connect(g); g.connect(pre); o.start(t); o.stop(t+d+0.02);
+    }
+    function tik(){ const t=ac.currentTime+0.01; tone(1500,t,0.06); }
+    function tok(){ const t=ac.currentTime+0.01; tone( 900,t,0.07); }
+
+    window.addEventListener('pointerdown', ()=>prime(), {once:true,capture:true});
+    window.addEventListener('keydown',     ()=>prime(), {once:true,capture:true});
+
+    function step(){
+      var d=new Date();
+      if (C) C.textContent = z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());
+      var s=d.getSeconds();                 // 0..59
+      var within=(s===0?30:(s<=30?s:s-30)); // 1..30
+      var remaining=30-within;              // 29..0
+      var fill=Math.round((remaining/30)*LEN);
+      if(M){ var left='#'.repeat(fill), right='-'.repeat(Math.max(0,LEN-fill));
+        M.textContent='['+left+right+'] '+z(remaining);
+      }
+      // tik/tok op beat (ongeveer elke sec)
+      var nowS=performance.now()/1000;
+      var bpm=60+(240-60)*(1-remaining/30), interval=60/bpm;
+      if(!nextTick||nowS>=nextTick){ prime().then(()=>{ if(!ac) return; ((s%2)===0?tik:tok)(); }); nextTick=nowS+interval; }
+
+      setTimeout(step,200);
+    }
+    step();
+
+    // local blockchain (LMW) + page worth 0 + route in 10s
+    (function(){
+      async function sha(s){ const b=new TextEncoder().encode(s); const h=await crypto.subtle.digest('SHA-256',b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('') }
+      function load(){ try{return JSON.parse(localStorage.getItem('the101game_chain')||'[]')}catch(_){return []} }
+      function save(c){ localStorage.setItem('the101game_chain', JSON.stringify(c)); try{ localStorage.setItem('kukel_total', String(c.length)); }catch(_){ } }
+      async function ensureGenesis(){ let c=load(); if(c.length) return c; const data={owner:'LMW', path:'/genesis', ts:Date.now(), note:'start'}; const prev='0'.repeat(64); const hash=await sha(JSON.stringify({i:0,prev,data})); c=[{i:0,prev,data,hash}]; save(c); return c; }
+      (async ()=>{
+        let c=await ensureGenesis();
+        const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, pageWorth:0, ts:Date.now()};
+        const hash=await sha(JSON.stringify({i,prev,data}));
+        c.push({i,prev,data,hash}); save(c);
+      })();
+      setTimeout(()=>{ location.assign('/w0l0.html'); }, 10_000);
+    })();
+  })();
+  </script>
+
+  <!-- SPEC COPY (for traceability) -->
+  <script>/* SPEC RAW
+'@ + (Html-Escape $specRaw) + @'
+*/</script>
+</body>
+</html>
+'@
+}
+
+function New-W0l0Html([string]$specRaw){
+  @'
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>w0l0 Â· wireframe</title>
+<style>
+  :root{ --w:min(100vw,420px); --bg:#000; --fg:#fff; --line:#fff }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#000;color:#fff;font:16px/1.35 ui-monospace,consolas,monospace}
+  #phone{width:var(--w);min-height:100dvh;margin:0 auto;display:flex;flex-direction:column;padding:12px}
+  main{flex:1;display:grid;place-items:center}
+  h1{margin:0;font-size:clamp(22px,8vw,40px);letter-spacing:.5px}
+  footer{padding:20px 0 calc(env(safe-area-inset-bottom) + 10px) 0;display:grid;place-items:center;color:#aaa}
+</style>
+<body>
+  <div id="phone">
+    <main>
+      <h1 id="msg">HELLO</h1>
+    </main>
+    <footer>bounce to /index.html in <span id="sec">10</span>s</footer>
+  </div>
+
+  <script>
+  (function(){
+    const L = localStorage.getItem('site_lang') || 'en';
+    const msg = document.getElementById('msg');
+    if (L==='nl'){ msg.textContent = 'hallo'; document.documentElement.setAttribute('lang','nl'); }
+    else { msg.textContent = 'HELLO'; document.documentElement.setAttribute('lang','en'); }
+
+    // simple chime on load after gesture
+    let ac; function init(){ if(ac) return; const C=window.AudioContext||window.webkitAudioContext; if(!C) return; ac=new C(); }
+    async function prime(){ try{ init(); if(ac&&ac.state==='suspended') await ac.resume(); }catch(_){ } }
+    function chime(){ if(!ac) return; const t=ac.currentTime+0.02; const o=ac.createOscillator(), g=ac.createGain(); o.type='sine'; o.frequency.value=(L==='nl'?659:880); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.9,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+0.14); }
+    window.addEventListener('pointerdown', ()=>{ prime().then(chime); }, {once:true,capture:true});
+    window.addEventListener('keydown',     ()=>{ prime().then(chime); }, {once:true,capture:true});
+
+    // 10s countdown + bounce
+    let t=10; const sec=document.getElementById('sec');
+    const iv=setInterval(()=>{ t--; if(sec) sec.textContent=String(t); if(t<=0){ clearInterval(iv); location.assign('/index.html'); }},1000);
+
+    // local blockchain (append LMW, pageWorth=1)
+    (function(){
+      async function sha(s){ const b=new TextEncoder().encode(s); const h=await crypto.subtle.digest('SHA-256',b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('') }
+      function load(){ try{return JSON.parse(localStorage.getItem('the101game_chain')||'[]')}catch(_){return []} }
+      function save(c){ localStorage.setItem('the101game_chain', JSON.stringify(c)); try{ localStorage.setItem('kukel_total', String(c.length)); }catch(_){ } }
+      async function ensureGenesis(){ let c=load(); if(c.length) return c; const data={owner:'LMW', path:'/genesis', ts:Date.now(), note:'start'}; const prev='0'.repeat(64); const hash=await sha(JSON.stringify({i:0,prev,data})); c=[{i:0,prev,data,hash}]; save(c); return c; }
+      (async ()=>{
+        let c=await ensureGenesis();
+        const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, pageWorth:1, ts:Date.now()};
+        const hash=await sha(JSON.stringify({i,prev,data}));
+        c.push({i,prev,data,hash}); save(c);
+      })();
+    })();
+  })();
+  </script>
+
+  <!-- SPEC COPY (for traceability) -->
+  <script>/* SPEC RAW
+'@ + (Html-Escape $specRaw) + @'
+*/</script>
+</body>
+</html>
+'@
+}
+
+# -----------------------
+# 3) renderen (TODO 0..10 meegenomen als trace), files schrijven
+# -----------------------
+$specIndex = Read-Spec 'specs\index.spec'
+$specW0    = Read-Spec 'specs\w0l0.spec'
+
+$newIndex = New-IndexHtml -specRaw $specIndex.Raw
+$newW0    = New-W0l0Html -specRaw $specW0.Raw
+
+Set-Content -Encoding UTF8 'httpdocs\index.html' $newIndex
+Set-Content -Encoding UTF8 'httpdocs\w0l0.html'  $newW0
+
+# -----------------------
+# 4) commit + push
+# -----------------------
+git add specs\template.spec, specs\index.spec, specs\w0l0.spec, httpdocs\index.html, httpdocs\w0l0.html | Out-Null
+git commit -m 'build(spec): index+w0l0 from specs (TODO 0..10 scaffolding) â€' baseline wireframe, clock+ASCII bar, tik/tok, LMW chain, routes' | Out-Null
+git push | Out-Null
+
+# --- deploy (veilig met vooraf samengestelde targets) ---
+$remote = 'root@82.165.231.86'
+$doc    = '/var/www/vhosts/the101game.io/httpdocs'
+$destIndex = "${remote}:${doc}/index.html"
+$destW0    = "${remote}:${doc}/w0l0.html"
+& scp "E:\the101game\httpdocs\index.html" $destIndex
+& scp "E:\the101game\httpdocs\w0l0.html"  $destW0
