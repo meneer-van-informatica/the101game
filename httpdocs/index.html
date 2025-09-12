@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>the101game · choose</title>
+<title>LONELY WOLF</title>
 <style>
   :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a }
   *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 ui-monospace,consolas,monospace}
@@ -118,7 +118,7 @@
       localStorage.setItem('w_audio_intent','1');
       localStorage.setItem('w_audio_intent_ts', String(Date.now()));
     }catch(_){}
-    location.assign('/w0l0.html');
+    if(!window._holdTime){ location.assign('/w0l0.html'); } else { window._navReady=true; }
   }, DURATION_MS);
 })();
 </script>
@@ -160,7 +160,7 @@
       routed = true;
       // taal al gezet via tiles/red dot; fallback op en
       try{ if(!localStorage.getItem('site_lang')) localStorage.setItem('site_lang','en'); }catch(_){}
-      location.assign('/w0l0.html');
+      if(!window._holdTime){ location.assign('/w0l0.html'); } else { window._navReady=true; }
       return;
     }
     raf = requestAnimationFrame(loop);
@@ -241,7 +241,94 @@
   });
 })();
 </script>
+<div id='dot-red'   aria-label='red · english · caps · stop'><span>RED</span></div>
+<div id='dot-green' aria-label='green · nederlands · lower · go'><span>GREEN</span></div>
+<script>
+/* two dots logic */
+(function(){
+  // --- tiny audio core re-use (snare-ish tick) ---
+  var AC = window.AudioContext||window.webkitAudioContext, ac, pre, comp;
+  function audio(){ if(ac) return ac; if(!AC) return null; ac = new AC();
+    pre=ac.createGain(); pre.gain.value=4.0;
+    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+    pre.connect(comp); comp.connect(ac.destination); return ac;
+  }
+  function prime(){ var a=audio(); if(!a) return Promise.resolve(); try{ if(a.state==='suspended'&&a.resume) return a.resume(); }catch(e){} return Promise.resolve(); }
+  function tone(freq,dur){
+    if(!audio()) return;
+    var t=ac.currentTime, o=ac.createOscillator(), g=ac.createGain();
+    o.type='square'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.9,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(pre); o.start(t); o.stop(t+dur+0.02);
+  }
+  function TIK(){ prime().then(function(){ tone(1600,0.06); }); } // red
+  function TOK(){ prime().then(function(){ tone(800,0.08);  }); } // green
+
+  // --- state ---
+  var langKey='site_lang';
+  function setLang(l){ try{localStorage.setItem(langKey,l);}catch(e){} document.documentElement.setAttribute('lang',l); }
+  function getLang(){ try{return localStorage.getItem(langKey)||'en';}catch(e){return 'en'} }
+
+  // Caps toggle as body class (in combinatie met jouw huidige content)
+  function setCaps(on){
+    document.body.classList.toggle('caps-on',  !!on);
+    document.body.classList.toggle('caps-off', !on);
+  }
+
+  // Timer hold: stop nav bij einde; groene dot laat doorgaan
+  window._holdTime = false;
+  window._navReady = false;
+
+  // Patch jouw auto-navigate naar w0l0: als er een oude regel zonder guard staat, vervang die inline
+  // (idempotent noop als al gepatcht)
+  try{
+    if (!window.__navGuardPatched) {
+      // monkey: intercept location.assign calls die exact naar /w0l0.html gaan
+      var _assign = window.location.assign.bind(window.location);
+      window.location.assign = function(url){
+        if (typeof url === 'string' && url.indexOf('/w0l0.html') !== -1) {
+          if (window._holdTime) { window._navReady = true; return; }
+        }
+        _assign(url);
+      };
+      window.__navGuardPatched = true;
+    }
+  }catch(_){}
+
+  // Dots binding
+  function bindDots(){
+    var red   = document.getElementById('dot-red');
+    var green = document.getElementById('dot-green');
+    if (!red || !green) return;
+
+    red.addEventListener('click', function(){
+      setLang('en');        // english
+      setCaps(true);        // CAPS
+      window._holdTime = true;  // time stop
+      TIK();                // tik
+    });
+    green.addEventListener('click', function(){
+      setLang('nl');        // nederlands
+      setCaps(false);       // lower
+      window._holdTime = false; // time go
+      TOK();                // tok
+      if (window._navReady){ window._navReady=false; if(!window._holdTime){ location.assign('/w0l0.html'); } else { window._navReady=true; } } // ga alsnog
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    // initial: default RED semantics (english + caps + hold) of behoud bestaande keuze
+    var L = getLang();
+    setLang(L);
+    setCaps(L==='en');             // en => caps, nl => lower
+    bindDots();
+    // prime eenmalig zodat chime/ticks straks mogen
+    window.addEventListener('pointerdown', function(){ prime(); }, {once:true,capture:true});
+  });
+})();
+</script>
 </body>
 </html>
+
 
 

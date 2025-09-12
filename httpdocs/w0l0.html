@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>w0l0 · mama + seconds + snare</title>
+<link rel='stylesheet' href='/kukel/kukel.css'>
 <style>
   :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a; --h:64px }
   *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
@@ -370,8 +371,11 @@ document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
   window.addEventListener('pointerdown', function(){ try{initAudio();}catch(e){} }, {once:true,capture:true});
   document.addEventListener('DOMContentLoaded', start);
 })();</script>
+<script src='/kukel/kukel.js' defer></script>
 </body>
 </html>
+
+
 
 
 
