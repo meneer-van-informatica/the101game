@@ -1,20 +1,9 @@
-﻿<!-- footer.spec · KPI footer -->
-<div class="ufooter">
-  <div class="row">
-    <span>BLOCK: <b data-block>0</b></span>
-    <span class="sep">·</span>
-    <span>KUKEL: <b data-kukel>0</b></span>
-    <span class="sep">·</span>
-    <span>LANG: <b data-lang>EN</b></span>
-    <span class="sep">·</span>
-    <a href="/blockchain" class="link">blockchain</a>
-  </div>
-  <div class="ts" data-ts></div>
+﻿<div id='km' style='padding:12px;border-top:1px dashed #fff;text-align:center'>
+  <div><span data-ts></span></div>
+  <div>KM â€” choose language</div>
+  <div>tip: press 0 or 1 Â· dogs vs. cats fights for kukels</div>
+  <div>dogs vs. cats â€” kukels</div>
+  <div>dogs: 0 Â· cats: 0 Â· total kukels: <span data-kukel>0</span></div>
+  <div>genesis (index) = <span data-block>0</span> kukel â€” w0l0 = 1 kukel</div>
+  <div>lang: <span data-lang>EN</span></div>
 </div>
-<style>
-  .ufooter{padding:10px 12px;border-top:1px dashed #fff;color:#fff;background:#000}
-  .ufooter .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-  .ufooter .sep{opacity:.55}
-  .ufooter .link{color:#4ea3ff;text-decoration:underline}
-  .ufooter .ts{opacity:.65;text-align:center;margin-top:4px}
-</style>
