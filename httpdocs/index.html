@@ -3,298 +3,88 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>the101game · choose</title>
-<style>/* caps toggle css */
-body.caps-on  #phone{ text-transform:uppercase }
-body.caps-off #phone{ text-transform:lowercase }
-</style>
-<link rel='stylesheet' href='/kukel/kukel.css'>
-<!-- BUILD VERSION AUTO -->
 <style>
   :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a }
-  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 ui-monospace,consolas,monospace}
-  #phone{width:var(--phone-w);min-height:100dvh;margin:0 auto;position:relative;display:flex;flex-direction:column}
-  header{padding:12px 12px 4px;border-bottom:1px solid var(--line)}
-  h1{margin:0 0 6px 0;font-size:16px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px}
-  .lang{border:2px solid #333;border-radius:10px;padding:.65rem .8rem;text-transform:lowercase;font-weight:800;text-align:center;user-select:none}
-  .lang.en.selected{border-color:#2ee670;box-shadow:0 0 0 2px #2ee67044 inset; text-transform:uppercase;} /* green = UPPERCASE */
-  .lang.nl.selected{border-color:#e62e2e;box-shadow:0 0 0 2px #e62e2e44 inset; text-transform:lowercase;} /* red = lowercase */
-  .badge{display:inline-block;margin-left:8px;font-size:.85rem;padding:.1rem .5rem;border:1px solid #333;border-radius:999px;opacity:.9}
-  .hint{opacity:.8;margin:2px 12px 8px}
-  main{padding:8px 12px 80px}
-  .card{border:1px solid var(--line);border-radius:10px;padding:10px}
-  .choices{display:grid;gap:8px;margin-top:8px}
-  .btn{padding:.65rem .85rem;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:8px;text-align:left}
-  .btn[data-go]{cursor:pointer}
-  .btn small{opacity:.8}
-  /* red dot button bottom center */
-  #reddot{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);
-          width:64px;height:64px;border-radius:50%;background:#ff2a2a;
-          box-shadow:0 0 0 2px rgba(255,42,42,.25), 0 0 16px rgba(255,42,42,.6);
-          display:grid;place-items:center;cursor:pointer;user-select:none;z-index:10}
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 ui-monospace,consolas,monospace}
+  #phone{width:var(--phone-w);min-height:100dvh;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  header{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:center}
+  #clock{font-weight:700;letter-spacing:.02em}
+  main{padding:10px 14px;display:grid;gap:10px}
+  .choice{border:2px solid #333;border-radius:12px;padding:1rem;text-align:center;user-select:none;cursor:pointer}
+  .choice.en{border-color:#2ee67055}  /* english hint */
+  .choice.nl{border-color:#e62e2e55}  /* nederlands hint */
+  .choice.selected{box-shadow:0 0 0 2px currentColor inset}
+  .choice.en.selected{color:#2ee670;border-color:#2ee670}
+  .choice.nl.selected{color:#e62e2e;border-color:#e62e2e}
+  body.caps-on  #phone{ text-transform:uppercase }
+  body.caps-off #phone{ text-transform:lowercase }
+  /* red dot */
+  #reddot{
+    position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);
+    width:64px;height:64px;border-radius:50%;background:#ff2a2a;
+    box-shadow:0 0 0 2px rgba(255,42,42,.25), 0 0 16px rgba(255,42,42,.6);
+    display:grid;place-items:center;cursor:pointer;user-select:none
+  }
   #reddot:active{transform:translateX(-50%) scale(.96)}
+  footer{height:72px} /* spacer for dot */
 </style>
-<body>
+<body class="caps-off">
 <div id="phone">
-  <header>
-    <h1>choose language <a id="kukel" href="/blockchain" class="badge">kukel: +1</a></h1>
-    <div class="hint">case 0/1 met toetsenbord of tap · red dot togglet taal</div>
-  </header>
-
-  <div class="row">
-    <div id="en" class="lang en selected">case 0: ENGLISH</div>
-    <div id="nl" class="lang nl">case 1: nederlands</div>
-  </div>
-
+  <header><div id="clock">—</div></header>
   <main>
-<section class="card" id="legend-ja-nee-maybe">
-  <b>labels</b>
-  <div class="pills">
-    <span class="pill ja">ja <span class="v">0</span></span>
-    <span class="pill maybe">maybe <span class="v">0.5</span></span>
-    <span class="pill nee">nee <span class="v">1</span></span>
-  </div>
-</section>
-    <section class="card">
-      <b>verhaaltje over de kezen tweeling (case 0 en case 1)</b>
-      <p style="margin:.35rem 0 0 0">informatica begon met een tweeling: <b>kees 1</b> (case 0) en <b>kees 2</b> (case 1). kees 1 zegt altijd ja; kees 2 altijd nee. toen kwam <b>kees 0</b> (case 2): misschien.</p>
-    </section>
-
-    <section class="card" style="margin-top:10px">
-      <b>de vraag is: welke kees ben jij?</b>
-      <div class="choices">
-        <div class="btn" data-go="/menno"><b>case 0:</b> brugklasser <small>(/menno)</small></div>
-        <div class="btn" data-go="/w0lo"><b>case 1:</b> vierdeklasser <small>(/w0lo)</small></div>
-        <div class="btn"><b>case 2:</b> vijfdeklasser <small>(soon)</small></div>
-        <div class="btn"><b>case 3:</b> zesdeklasser <small>(soon)</small></div>
-        <div class="btn"><b>case 4:</b> klasse apart <small>(soon)</small></div>
-      </div>
-      <div class="hint">typ 0..4 of tik op een optie</div>
-    </section>
+    <div id="en" class="choice en selected">CASE 0: ENGLISH</div>
+    <div id="nl" class="choice nl">case 1: nederlands</div>
   </main>
+  <footer></footer>
 </div>
-
-<div id="reddot" aria-label="toggle language"></div>
+<div id="reddot" aria-label="toggle caps (red dot)" role="button" tabindex="0"></div>
 
 <script>
-/* ---- KUKEL +1 (local only) ---- */
 (function(){
-  const key='kukel_total';
-  let v = parseInt(localStorage.getItem(key)||'0',10);
-  v = (isNaN(v)?0:v) + 1; // +1 op load
-  localStorage.setItem(key, String(v));
-  const el=document.getElementById('kukel');
-  if (el) el.textContent = 'kukel: +' + v;
-})();
-
-/* ---- language choose (tiles + red dot) ---- */
-let choice = 'en'; // default english (green outline)
-const enEl = document.getElementById('en');
-const nlEl = document.getElementById('nl');
-function applyChoice(lang){
-  choice = lang;
-  enEl.classList.toggle('selected', lang==='en');
-  nlEl.classList.toggle('selected', lang==='nl');
-  try{ localStorage.setItem('site_lang', lang); }catch(_){}
-  if (lang==='nl'){ localStorage.setItem('w_msg_text','hallo mama'); localStorage.setItem('w_msg_case','1'); }
-  else            { localStorage.setItem('w_msg_text','HELLO MAMA'); localStorage.setItem('w_msg_case','0'); }
-}
-enEl.onclick = ()=>{ applyChoice('en'); chime(); };
-nlEl.onclick = ()=>{ applyChoice('nl'); chime(); };
-document.getElementById('reddot').addEventListener('click', ()=>{ applyChoice(choice==='en'?'nl':'en'); chime(); });
-
-/* ---- story choices (click + keyboard) ---- */
-function go(path){ if(path) location.assign(path); else alert('coming soon'); }
-document.querySelectorAll('.btn[data-go]').forEach(b=>b.addEventListener('click', ()=>go(b.dataset.go)));
-window.addEventListener('keydown', (e)=>{
-  if(e.key==='0'){ go('/menno'); }
-  if(e.key==='1'){ go('/w0lo'); }
-  if(e.key==='2'){ go(''); }
-  if(e.key==='3'){ go(''); }
-  if(e.key==='4'){ go(''); }
-});
-
-/* ---- audio: chime (toggle) + tiny unlock ---- */
-let ac, pre, comp, master, chimex=0;
-function initAudio(){ if(ac) return;
-  ac=new (window.AudioContext||window.webkitAudioContext)();
-  pre=ac.createGain(); pre.gain.value=4.0;
-  comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-  master=ac.createGain(); master.gain.value=0.18;
-  pre.connect(comp); comp.connect(master); master.connect(ac.destination);
-}
-async function prime(){ try{initAudio(); if(ac.state==='suspended') await ac.resume(); }catch(_){ } }
-function tone(freq, at, dur){
-  const o=ac.createOscillator(), g=ac.createGain();
-  o.type='sine'; o.frequency.value=freq;
-  g.gain.setValueAtTime(0, at);
-  g.gain.linearRampToValueAtTime(0.9, at+0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
-  o.connect(g); g.connect(pre); o.start(at); o.stop(at+dur+0.02);
-}
-function chime(){
-  prime();
-  const t=ac.currentTime;
-  if ((chimex^=1)===1){ tone(880, t, 0.15); tone(1320, t+0.02, 0.12); }
-  else                { tone(659, t, 0.15); tone(990,  t+0.02, 0.12); }
-}
-window.addEventListener('pointerdown', ()=>prime(), {once:true,capture:true});
-window.addEventListener('keydown', ()=>prime(), {once:true,capture:true});
-</script>
-<script>
-/* one-shot open chime */
-(function(){
-  function makeMiniChime(){
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if(!AC) return function(){};
-    var ac, pre, comp, master, ready=false;
-    function init(){
-      if(ac) return;
-      ac = new AC();
-      pre = ac.createGain(); pre.gain.value = 4.0;
-      comp = ac.createDynamicsCompressor();
-      comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-      master = ac.createGain(); master.gain.value = 0.18;
-      pre.connect(comp); comp.connect(master); master.connect(ac.destination);
-    }
-    function prime(){ try{ init(); if (ac.state==='suspended' && ac.resume) return ac.resume(); }catch(e){} return Promise.resolve(); }
-    function tone(f,a,d){ var o=ac.createOscillator(), g=ac.createGain();
-      o.type='sine'; o.frequency.value=f; g.gain.setValueAtTime(0,a);
-      g.gain.linearRampToValueAtTime(0.9,a+0.01); g.gain.exponentialRampToValueAtTime(0.0001,a+d);
-      o.connect(g); g.connect(pre); o.start(a); o.stop(a+d+0.02);
-    }
-    return function(){
-      prime().then(function(){
-        var t = ac.currentTime + 0.02;
-        tone(880,t,0.12); tone(1320,t+0.02,0.10);
-      });
-    };
+  /* -------- clock (dd mmmm yyyy HH:MM:SS) -------- */
+  function pad(n){ return (n<10?'0':'')+n }
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  function fmtDate(d){
+    const dd=pad(d.getDate()), m=months[d.getMonth()], y=d.getFullYear();
+    const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
+    return dd+' '+m+' '+y+' '+HH+':'+MM+':'+SS;
   }
+  const clock = document.getElementById('clock');
+  function tick(){ const now=new Date(); clock.textContent = fmtDate(now); }
+  tick(); setInterval(tick, 250);
 
-  var did=false;
-  function openChime(){
-    if(did) return; did=true;
-    if (typeof window.chime === 'function') {
-      // gebruik jouw bestaande chime (red dot sound) voor consistentie
-      window.chime();
-    } else {
-      // mini fallback chime
-      makeMiniChime()();
-    }
+  /* -------- lang choose -------- */
+  let choice = (localStorage.getItem('site_lang') || 'en');
+  const enEl = document.getElementById('en');
+  const nlEl = document.getElementById('nl');
+  function applyChoice(lang){
+    choice = lang;
+    localStorage.setItem('site_lang', lang);
+    document.documentElement.setAttribute('lang', lang);
+    enEl.classList.toggle('selected', lang==='en');
+    nlEl.classList.toggle('selected', lang==='nl');
   }
+  enEl.onclick = ()=>{ applyChoice('en'); chime(); };
+  nlEl.onclick = ()=>{ applyChoice('nl'); chime(); };
+  applyChoice(choice);
 
-  // probeer op load; als geblokkeerd, dan bij eerste gesture
-  document.addEventListener('DOMContentLoaded', openChime, {once:true});
-  window.addEventListener('pointerdown', openChime, {once:true, capture:true});
-  window.addEventListener('keydown', openChime, {once:true, capture:true});
-})();
-</script>
-<script>
-/* 10s timer engine */
-(function(){
-  // ---- duration per page (persist by pathname)
-  var keyDur = 'timer:' + location.pathname;
-  function getDur(){ try{ var v = parseInt(localStorage.getItem(keyDur)||'0',10); return (v>0?v:10); }catch(e){ return 10; } }
-  function setDur(s){ try{ localStorage.setItem(keyDur, String(s)); }catch(e){} }
-
-  // init speed select
-  function initSpeed(){
-    var sel = document.getElementById('speed'); if(!sel) return;
-    var d = getDur(); ['5','10','30'].forEach(function(v){ if (String(d)===v) sel.value=v; });
-    sel.addEventListener('change', function(){ setDur(parseInt(sel.value,10)||10); startTimer(true); });
-  }
-
-  // ---- audio: mini core (chime + snare tick)
-  var ac, pre, comp, master, chimex=0;
+  /* -------- audio + caps toggle (red dot == CapsLock) -------- */
+  let ac, pre, master;
   function initAudio(){ if(ac) return;
-    var C = window.AudioContext||window.webkitAudioContext; if(!C) return;
-    ac=new C(); pre=ac.createGain(); pre.gain.value=4.0;
-    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-    master=ac.createGain(); master.gain.value=0.18; pre.connect(comp); comp.connect(master); master.connect(ac.destination);
-  }
-  function prime(){ try{initAudio(); if(ac&&ac.state==='suspended'&&ac.resume) return ac.resume();}catch(e){} return Promise.resolve(); }
-  function tone(freq, at, dur){ if(!ac) return; var o=ac.createOscillator(), g=ac.createGain();
-    o.type='sine'; o.frequency.value=freq; g.gain.setValueAtTime(0,at);
-    g.gain.linearRampToValueAtTime(0.9,at+0.01); g.gain.exponentialRampToValueAtTime(0.0001,at+dur);
-    o.connect(g); g.connect(pre); o.start(at); o.stop(at+dur+0.02);
-  }
-  function chime(){ prime().then(function(){ if(!ac) return; var t=ac.currentTime+0.02; if((chimex^=1)===1){tone(880,t,0.12);tone(1320,t+0.02,0.10);} else {tone(659,t,0.12);tone(990,t+0.02,0.10);} }); }
-  function snare(at){
-    if(!ac) return; var len=ac.sampleRate*0.16, buf=ac.createBuffer(1,len,ac.sampleRate), data=buf.getChannelData(0);
-    for(var i=0;i<len;i++){ data[i]=Math.random()*2-1; }
-    var src=ac.createBufferSource(); src.buffer=buf;
-    var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; bp.Q.value=0.9;
-    var hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=600;
-    var g=ac.createGain(); g.gain.setValueAtTime(0.8,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.14);
-    src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(pre); src.start(at); src.stop(at+0.16);
-  }
-
-  // ---- meter visueel + tempo
-  var raf=0, t0=0, DUR=10, nextTick=0;
-  function startTimer(restart){
-    DUR = getDur();
-    var fill = document.getElementById('meterFill');
-    var val  = document.getElementById('meterVal');
-    if (!fill||!val) return;
-    if (raf) cancelAnimationFrame(raf);
-    t0 = performance.now();
-    nextTick = 0;
-
-    function loop(now){
-      var elapsed = now - t0;
-      var frac = elapsed / (DUR*1000); if (frac>1) frac = 1;
-      var value = 1 - frac;                  // 1.0 -> 0.0
-      var pct = value * 100;                 // width %
-      fill.style.width = pct + '%';
-      val.textContent = value.toFixed(1);
-
-      // tempo: map value 1..0 -> BPM 60..240 (sneller richting rood)
-      var bpm = 60 + (240-60)*(1-value);
-      var interval = 60/bpm; // sec
-      var nowS = now/1000;
-      if (!nextTick || nowS >= nextTick){ prime().then(function(){ if(!ac) return; var t = ac.currentTime + 0.02; snare(t); }); nextTick = nowS + interval; }
-
-      if (frac >= 1){
-        // klaar → naar w0l0.html met taalkeuze uit localStorage (applyChoice had dit al gezet)
-        location.assign('/w0l0.html');
-        return;
-      }
-      raf = requestAnimationFrame(loop);
-    }
-    raf = requestAnimationFrame(loop);
-  }
-
-  // chime on load (fallback op 1e gesture)
-  function openChime(){ chime(); }
-  document.addEventListener('DOMContentLoaded', openChime, {once:true});
-  window.addEventListener('pointerdown', openChime, {once:true, capture:true});
-  window.addEventListener('keydown', openChime, {once:true, capture:true});
-
-  document.addEventListener('DOMContentLoaded', function(){ initSpeed(); startTimer(true); });
-})();
-</script>
-<script src='/kukel/kukel.js' defer></script>
-<script>
-/* caps lock + red dot sync */
-(function(){
-  var ac, pre, master;
-  function initAudio(){
-    if (ac) return;
-    var C = window.AudioContext||window.webkitAudioContext; if (!C) return;
-    ac = new C();
-    pre = ac.createGain(); pre.gain.value = 3.5;
-    master = ac.createGain(); master.gain.value = 0.2;
+    const C=window.AudioContext||window.webkitAudioContext; if(!C) return;
+    ac=new C(); pre=ac.createGain(); pre.gain.value=3.5; master=ac.createGain(); master.gain.value=0.2;
     pre.connect(master); master.connect(ac.destination);
   }
-  function prime(){ try{initAudio(); if(ac&&ac.state==='suspended'&&ac.resume) return ac.resume();}catch(e){} return Promise.resolve(); }
-  function blip(freq, dur){
-    if(!ac) return; var t=ac.currentTime+0.01, o=ac.createOscillator(), g=ac.createGain();
+  function prime(){ try{initAudio(); if(ac&&ac.state==='suspended'&&ac.resume) return ac.resume();}catch(_){ } return Promise.resolve(); }
+  function blip(freq,dur){
+    if(!ac) return; const t=ac.currentTime+0.01, o=ac.createOscillator(), g=ac.createGain();
     o.type='square'; o.frequency.value=freq;
     g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.9,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     o.connect(g); g.connect(pre); o.start(t); o.stop(t+dur+0.02);
   }
-  function tik(){ prime().then(function(){ blip(950,0.08); }); }   // lower
-  function tok(){ prime().then(function(){ blip(1350,0.10); }); }  // UPPER
+  function tik(){ prime().then(()=>blip(950,0.08)); }   // lower
+  function tok(){ prime().then(()=>blip(1350,0.10)); }  // UPPER
+  function chime(){ prime().then(()=>{ blip(880,0.10); setTimeout(()=>blip(1320,0.08), 30); }); }
 
   function getCaps(){ try{ return localStorage.getItem('caps_state')==='1'; }catch(_){ return false; } }
   function setCaps(on){
@@ -302,42 +92,32 @@ window.addEventListener('keydown', ()=>prime(), {once:true,capture:true});
     document.body.classList.toggle('caps-on',  !!on);
     document.body.classList.toggle('caps-off', !on);
   }
-  function toggleCaps(){
-    var on = !getCaps();
-    setCaps(on);
-    if (on) tok(); else tik();
-  }
+  function toggleCaps(){ const on = !getCaps(); setCaps(on); on?tok():tik(); }
 
-  // init once DOM ready
-  function boot(){
-    // default: off -> lowercase
-    setCaps(getCaps());
-    // bind CapsLock key
-    window.addEventListener('keydown', function(e){
-      if (e.key === 'CapsLock'){ e.preventDefault(); toggleCaps(); }
-    });
+  // bind red dot + keyboard
+  const rd = document.getElementById('reddot');
+  rd.addEventListener('click', toggleCaps);
+  rd.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleCaps(); }});
+  window.addEventListener('keydown', e=>{ if(e.key==='CapsLock'){ e.preventDefault(); toggleCaps(); } });
 
-    // bind red dot (add extra handler; behoud bestaande toggles)
-    var rd = document.getElementById('reddot');
-    if (rd){
-      rd.addEventListener('click', function(){ toggleCaps(); }, {passive:true});
-      rd.addEventListener('keydown', function(ev){ if(ev.key==='Enter' || ev.key===' '){ ev.preventDefault(); toggleCaps(); }});
-      rd.setAttribute('aria-label', (rd.getAttribute('aria-label')||'') + ' (caps toggle)');
-      rd.setAttribute('role','button'); rd.setAttribute('tabindex','0');
-    }
+  // prime audio on first gesture
+  window.addEventListener('pointerdown', ()=>prime(), {once:true,capture:true});
+  window.addEventListener('keydown',    ()=>prime(), {once:true,capture:true});
 
-    // eerste user-gesture prime voor audio
-    window.addEventListener('pointerdown', function(){ prime(); }, {once:true,capture:true});
-    window.addEventListener('keydown',     function(){ prime(); }, {once:true,capture:true});
-  }
+  // initialize caps state from storage
+  setCaps(getCaps());
 
-  if (document.readyState==='complete' || document.readyState==='interactive') boot();
-  else document.addEventListener('DOMContentLoaded', boot, {once:true});
+  /* -------- auto-forward after 30s -------- */
+  const DURATION_MS = 30000;
+  setTimeout(()=>{
+    // hint next page that audio may start immediately
+    try{
+      localStorage.setItem('w_audio_intent','1');
+      localStorage.setItem('w_audio_intent_ts', String(Date.now()));
+    }catch(_){}
+    location.assign('/w0l0.html');
+  }, DURATION_MS);
 })();
 </script>
 </body>
 </html>
-
-
-
-
