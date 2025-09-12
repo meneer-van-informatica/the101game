@@ -27,6 +27,7 @@
   #autoplay-gate .tip{opacity:.8;font-size:.9em}
 </style>
 <body>
+<div class='page-meter'><select id='pspeed'><option value='5'>5s</option><option value='10' selected>10s</option><option value='30'>30s</option></select><div class='pbar'><div id='pfill' class='pfill'></div><div class='pval'><span id='pval'>1.0</span></div></div></div>
 <div id="phone">
   <div class="bar">
     <div class="left">
@@ -325,8 +326,53 @@ document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
 })();
 </script>
 <script>window.APP_BUILD=2; try{localStorage.setItem('app_build','2')}catch(_){}</script>
+<script>(function(){
+  var keyDur = 'timer:' + location.pathname;
+  function getDur(){ try{ var v=parseInt(localStorage.getItem(keyDur)||'0',10); return (v>0?v:10);}catch(e){return 10;} }
+  function setDur(s){ try{ localStorage.setItem(keyDur, String(s)); }catch(e){} }
+
+  var ac, pre, comp, master, nextTick=0, raf=0, t0=0, DUR=10;
+  function initAudio(){ if(ac) return; var C=window.AudioContext||window.webkitAudioContext; if(!C) return;
+    ac=new C(); pre=ac.createGain(); pre.gain.value=4.0;
+    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
+    master=ac.createGain(); master.gain.value=0.18; pre.connect(comp); comp.connect(master); master.connect(ac.destination);
+  }
+  function prime(){ try{initAudio(); if(ac&&ac.state==='suspended'&&ac.resume) return ac.resume();}catch(e){} return Promise.resolve(); }
+  function snare(at){
+    if(!ac) return; var len=ac.sampleRate*0.16, buf=ac.createBuffer(1,len,ac.sampleRate), data=buf.getChannelData(0);
+    for(var i=0;i<len;i++){ data[i]=Math.random()*2-1; }
+    var src=ac.createBufferSource(); src.buffer=buf;
+    var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; bp.Q.value=0.9;
+    var hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=600;
+    var g=ac.createGain(); g.gain.setValueAtTime(0.8,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.14);
+    src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(pre); src.start(at); src.stop(at+0.16);
+  }
+
+  function start(){
+    DUR=getDur();
+    var fill=document.getElementById('pfill'), val=document.getElementById('pval'), sel=document.getElementById('pspeed');
+    if(!fill||!val) return;
+    if(sel){ ['5','10','30'].forEach(function(v){ if(String(DUR)===v) sel.value=v; });
+      sel.addEventListener('change', function(){ setDur(parseInt(sel.value,10)||10); start(); }); }
+    if(raf) cancelAnimationFrame(raf); t0=performance.now(); nextTick=0;
+
+    function loop(now){
+      var frac=(now-t0)/(DUR*1000); if(frac>1) frac=1;
+      var value=1-frac; fill.style.width=(value*100)+'%'; val.textContent=value.toFixed(1);
+      var bpm=60+(240-60)*(1-value), interval=60/bpm, nowS=now/1000;
+      if(!nextTick||nowS>=nextTick){ prime().then(function(){ if(!ac) return; var t=ac.currentTime+0.02; snare(t); }); nextTick=nowS+interval; }
+      if(frac>=1){ location.assign('/w0l1.html'); return; }
+      raf=requestAnimationFrame(loop);
+    }
+    raf=requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('pointerdown', function(){ try{initAudio();}catch(e){} }, {once:true,capture:true});
+  document.addEventListener('DOMContentLoaded', start);
+})();</script>
 </body>
 </html>
+
 
 
 

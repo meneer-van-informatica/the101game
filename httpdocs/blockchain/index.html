@@ -35,4 +35,16 @@
   reset.onclick=async()=>{await resetChain();try{if(window.opener&&window.opener._w0_stop)window.opener._w0_stop()}catch(e){}render()}
   (async()=>{if(!load().length)await genesis('fresh');render()})()
 </script>
+<script>/* newest-first view */
+(function(){
+  function load(){ try{ return JSON.parse(localStorage.getItem('the101game_chain')||'[]') }catch(_){ return [] } }
+  function fmt(c){ return JSON.stringify(c,null,2); }
+  function render(){
+    var c = load(); var r = c.slice().reverse(); // newest first
+    var out = document.getElementById('out'); if(out) out.textContent = fmt(r);
+  }
+  document.addEventListener('DOMContentLoaded', render);
+})();
+</script>
 </body></html>
+
