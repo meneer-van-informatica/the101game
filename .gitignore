@@ -8,3 +8,5 @@
 /the101gameengine/engine.db
 *.pyc
 node_modules/
+!httpdocs/stippy/
+!httpdocs/stippy/*
