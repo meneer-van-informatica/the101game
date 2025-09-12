@@ -25,12 +25,15 @@
   #tgrid div{outline:1px solid #111;background:transparent}
   footer{opacity:.7;font-size:.9em;margin-top:auto}
   .hint{color:var(--muted)}
+  header .icon{background:none;border:0;padding:0;margin-left:.75rem}
+  header .icon svg{display:block;width:1.2rem;height:1.2rem}
 </style>
 <body class='safe'>
   <header>
     <div class='brand'>the101game<span class='dot' aria-hidden='true'></span></div>
     <div class='hint'>mobile · webapp · pwa</div>
-  </header>
+  <button id='favicon-btn' class='icon' title='favicon' aria-label='favicon'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='10' fill='#ff2a2a'/></svg></button>
+</header>
 
   <main id='screen' aria-label='app screen'>
     <section class='block'><div class='label'>side</div><div class='value' data-key='side'>i am right</div></section>
@@ -60,6 +63,7 @@
 <script src='/stippy/w0l0-nav.js' defer></script>
 </body>
 </html>
+
 
 
 
