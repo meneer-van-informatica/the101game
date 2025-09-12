@@ -373,8 +373,81 @@
   setSelected('red');
 })();
 </script>
+<script>
+/* capslock case swap v2 */
+(function(){
+  // alle elementen die mee mogen doen: geef ze class="case" of data-case
+  var SEL = '[data-case], .case';
+
+  function q(id){ return document.getElementById(id); }
+  function forEachCase(fn){
+    document.querySelectorAll(SEL).forEach(function(el){
+      // alleen pure textnodes aanpassen (geen inputs)
+      if (!el) return;
+      var t = el.textContent || '';
+      fn(el, t);
+    });
+  }
+
+  function setLang(lang){
+    // lang: 'en' => UPPER, 'nl' => lower
+    try{ localStorage.setItem('site_lang', lang); }catch(e){}
+    var upper = (lang === 'en');
+    forEachCase(function(el, t){
+      el.textContent = upper ? t.toUpperCase() : t.toLowerCase();
+    });
+    // dots selecteren als ze bestaan
+    try{
+      var red=q('dot-red'), green=q('dot-green');
+      if(red&&green){
+        red.classList.toggle('sel', upper);
+        green.classList.toggle('sel', !upper);
+        red.setAttribute('aria-selected', upper?'true':'false');
+        green.setAttribute('aria-selected', !upper?'true':'false');
+      }
+    }catch(e){}
+  }
+
+  function toggleCase(){
+    var lang = (localStorage.getItem('site_lang') || 'en');
+    setLang(lang === 'en' ? 'nl' : 'en');
+    // laat tik/tok horen als je soundstack al actief is:
+    try {
+      // dispatch events die je bestaande audio-code kan oppikken
+      var ev = new Event('caps-toggled');
+      window.dispatchEvent(ev);
+    } catch(e){}
+  }
+
+  // initialiseer op basis van opgeslagen keuze (default EN/upper)
+  (function init(){
+    var saved = localStorage.getItem('site_lang') || 'en';
+    setLang(saved);
+  })();
+
+  // NIEUW: caps lock: alleen wij handelen deze af
+  window.addEventListener('keydown', function(e){
+    if (e.key === 'CapsLock'){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      toggleCase();
+    }
+  }, {capture:true});
+
+  // koppel ook aan dots (red=en, green=nl), zonder de rest te breken
+  var red=q('dot-red'), green=q('dot-green');
+  if (red)   red.addEventListener('click',  function(){ setLang('en');  }, {capture:false});
+  if (green) green.addEventListener('click',function(){ setLang('nl');  }, {capture:false});
+
+  // expose voor andere scripts
+  window._setLang = setLang;
+  window._toggleCase = toggleCase;
+})();
+</script>
 </body>
 </html>
+
 
 
 
