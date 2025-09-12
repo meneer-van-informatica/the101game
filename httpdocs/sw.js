@@ -58,3 +58,4 @@ self.addEventListener('message', async (e) => {
     e.source.postMessage({ type: 'VER', ver: VER });
   }
 });
+
