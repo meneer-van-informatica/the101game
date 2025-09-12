@@ -28,7 +28,13 @@
     <button id="reset" class="btn">reset</button>
     <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
   </div>
-  <div id="wrap"><section id="view" aria-label="tetris 40x400"><div id="legend"></div></section></div>
+  <div id="autoplay-gate" role="dialog" aria-modal="true">
+  <div class="card">
+    <b>tap to start sound</b>
+    <div class="tip">(volume bouwt van 0 → 100 tijdens eerste blok)</div>
+  </div>
+</div>
+<div id="wrap"><section id="view" aria-label="tetris 40x400"><div id="legend"></div></section></div>
 
 <script>
 /* ===== audio core (loud chain) ===== */
@@ -130,5 +136,48 @@ document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
 setVolume(0);
 spawnAndDrop(0);
 </script>
-</body>
+<script>
+/* autoplay gate */
+(function(){
+  const gate = document.getElementById('autoplay-gate');
+
+  async function tryStartSilently(){
+    // probeer direct: init + resume + vol=0
+    try{ initAudio(); setVolume?.(0); }catch(_){}
+    try{
+      if (ac && ac.state === 'suspended') await ac.resume();
+    }catch(_){}
+    // beslis
+    if (ac && ac.state === 'running'){
+      hideGate(); // succes → geen tik nodig
+      return true;
+    }
+    showGate();   // fallback: toon overlay
+    return false;
+  }
+
+  function showGate(){ gate?.classList.add('show'); }
+  function hideGate(){ gate?.classList.remove('show'); }
+
+  // eerste interactie overal → unlock + verberg gate
+  function userUnlock(){
+    try{ initAudio(); }catch(_){}
+    try{ ac && ac.resume && ac.resume(); }catch(_){}
+    hideGate();
+    window.removeEventListener('pointerdown', userUnlock, true);
+    window.removeEventListener('keydown', userUnlock, true);
+  }
+  window.addEventListener('pointerdown', userUnlock, true);
+  window.addEventListener('keydown',     userUnlock, true);
+  gate?.addEventListener('click', userUnlock, {passive:true});
+
+  // probeer meteen bij load (succès op desktop/engaged sites; mobiel/ios meestal niet)
+  if (document.readyState === 'complete' || document.readyState === 'interactive'){
+    tryStartSilently();
+  } else {
+    document.addEventListener('DOMContentLoaded', tryStartSilently, {once:true});
+  }
+})();
+</script></body>
 </html>
+
