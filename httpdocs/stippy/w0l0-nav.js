@@ -3,78 +3,107 @@
   const LIMIT=10;
   let lastTs=0;
 
-  // audio core + unlock voor mobiel
-  let ac, master, unlocked=false;
+  // audio core (harder + bass), met compressor
+  let ac, comp, outGain, unlocked=false;
   function initAudio(){
     if(ac) return;
     ac = new (window.AudioContext||window.webkitAudioContext)();
-    master = ac.createGain();
-    master.gain.value = 0.08;
-    master.connect(ac.destination);
+    comp = ac.createDynamicsCompressor();
+    comp.threshold.setValueAtTime(-24, ac.currentTime);
+    comp.knee.setValueAtTime(15, ac.currentTime);
+    comp.ratio.setValueAtTime(12, ac.currentTime);
+    comp.attack.setValueAtTime(0.003, ac.currentTime);
+    comp.release.setValueAtTime(0.25, ac.currentTime);
+    outGain = ac.createGain();
+    outGain.gain.value = 0.9; // volume boost (x ~15 tov eerder)
+    comp.connect(outGain);
+    outGain.connect(ac.destination);
   }
   function unlock(){
     if(unlocked) return;
     initAudio();
-    // resume + ultra-kort bijna-silent tikje om safari/ios te unlocken
     const resume = ac.resume ? ac.resume() : Promise.resolve();
     resume.finally(()=>{
       try{
-        const o = ac.createOscillator();
-        const g = ac.createGain();
+        const o=ac.createOscillator(), g=ac.createGain();
         o.type='sine'; o.frequency.value=440;
         g.gain.setValueAtTime(0.0001, ac.currentTime);
-        o.connect(g); g.connect(master);
-        o.start();
-        o.stop(ac.currentTime+0.02);
+        o.connect(g); g.connect(comp);
+        o.start(); o.stop(ac.currentTime+0.02);
       }catch(_){}
       unlocked=true;
-      // listeners opruimen na unlock
       ['pointerdown','touchstart','click','keydown'].forEach(t=>document.removeEventListener(t,onFirst,true));
     });
   }
   function onFirst(e){
-    if(e.type==='keydown' && !(e.key===' ' || e.key==='Enter')) return;
+    if(e.type==='keydown' && !(e.key===' '||e.key==='Enter')) return;
     unlock();
   }
   ['pointerdown','touchstart','click','keydown'].forEach(t=>document.addEventListener(t,onFirst,{capture:true,passive:true}));
 
-  function tik(freq=1200, dur=0.035){
+  // loud tick + bass thump in sync
+  function tik(){
     initAudio(); if(ac.state==='suspended'){ ac.resume(); }
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type='square'; o.frequency.value=freq;
-    g.gain.setValueAtTime(0, ac.currentTime);
-    g.gain.linearRampToValueAtTime(1, ac.currentTime+0.005);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+dur);
-    o.connect(g); g.connect(master);
-    o.start(); o.stop(ac.currentTime+dur+0.02);
-  }
-  function chime(){
-    initAudio(); if(ac.state==='suspended'){ ac.resume(); }
-    const t = ac.currentTime;
-    const tones = [[880,0],[1318.5,0.08],[1760,0.16]];
-    for(const [f,dt] of tones){
+    const t=ac.currentTime;
+
+    // high click
+    {
       const o=ac.createOscillator(), g=ac.createGain();
-      o.type='sine'; o.frequency.value=f;
-      g.gain.setValueAtTime(0, t+dt);
-      g.gain.linearRampToValueAtTime(0.9, t+dt+0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t+dt+0.24);
-      o.connect(g); g.connect(master);
-      o.start(t+dt); o.stop(t+dt+0.26);
+      o.type='square'; o.frequency.setValueAtTime(1400,t);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(1.0, t+0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.05);
+      o.connect(g); g.connect(comp);
+      o.start(t); o.stop(t+0.07);
+    }
+    // bass thump (telefoon-bass is beperkt maar dit helpt)
+    {
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(180,t);
+      o.frequency.exponentialRampToValueAtTime(110, t+0.09);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(1.0, t+0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.12);
+      o.connect(g); g.connect(comp);
+      o.start(t); o.stop(t+0.14);
     }
   }
-  window._w0_chime = chime;
 
+  // ui: tap counter (n/10) rechtsboven
+  let counterEl;
+  function ensureCounter(){
+    if(counterEl) return;
+    const css = document.createElement('style');
+    css.textContent = `
+      #tap-counter{position:fixed;top:10px;right:10px;z-index:100000;
+        background:#111a;border:1px solid #333;padding:.25rem .5rem;border-radius:.5rem;
+        font:14px/1 ui-monospace,consolas,monospace;color:#eaeaea;backdrop-filter:blur(4px)}
+      @media (prefers-color-scheme: light){#tap-counter{background:#fff9;color:#111;border-color:#ccc}}
+      #tap-counter.bump{transform:scale(1.08)} `;
+    document.head.appendChild(css);
+    counterEl = document.createElement('div');
+    counterEl.id = 'tap-counter';
+    document.body.appendChild(counterEl);
+    updateCounter();
+  }
   function get(){ return parseInt(localStorage.getItem(KEY)||'0',10) }
   function set(v){ localStorage.setItem(KEY,String(v)) }
   function reset(){ localStorage.removeItem(KEY) }
+  function updateCounter(){
+    ensureCounter();
+    const c = get();
+    counterEl.textContent = c + '/' + LIMIT;
+    counterEl.classList.remove('bump'); void counterEl.offsetWidth; counterEl.classList.add('bump');
+    setTimeout(()=>counterEl.classList.remove('bump'),120);
+  }
 
   function bump(){
     const now=Date.now();
     if(now-lastTs<180) return; // debounce dubbele events
     lastTs=now;
-    tik(); // sync tik
-    const c=get()+1; set(c);
+    tik();                      // sound
+    const c=get()+1; set(c);    // count
+    updateCounter();            // visual
     if(c>=LIMIT){ reset(); location.assign('/w0l0.html') }
   }
 
@@ -84,18 +113,12 @@
     bump();
   }
 
-  // unified input voor taps/clicks
+  // input
   window.addEventListener('pointerup', handler, {passive:true});
   window.addEventListener('click',     handler, {passive:true});
   window.addEventListener('touchend',  handler, {passive:true});
 
-  // favicon chime op échte user-gesture (pointerdown = sneller op mobiel)
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const fav=document.getElementById('favicon-btn');
-    if(!fav) return;
-    const play = (e)=>{ e.preventDefault(); chime(); };
-    fav.addEventListener('pointerdown', play, {passive:false});
-    fav.addEventListener('click',       play, {passive:false});
-    fav.addEventListener('keydown',     (e)=>{ if(e.key===' '||e.key==='Enter'){ play(e) } }, {passive:false});
-  });
+  // favicon chime blijft werken via bestaand script (niet aangepast hier)
+
+  document.addEventListener('DOMContentLoaded', ()=>{ ensureCounter(); updateCounter(); });
 })();
