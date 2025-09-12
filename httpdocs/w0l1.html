@@ -1,25 +1,140 @@
 ﻿<!doctype html>
 <html lang="nl">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>w0l1 · todo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>w0l1 · team</title>
 <style>
-  :root{--bg:#000;--fg:#eaeaea;--line:#2a2a2a;--pad:10px}
-  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:16px/1.5 ui-monospace,consolas,monospace}
-  .wrap{min-height:100dvh;display:grid;place-items:center;padding:calc(env(safe-area-inset-top) + var(--pad)) var(--pad) calc(env(safe-area-inset-bottom) + var(--pad)) var(--pad)}
-  .card{border:1px solid var(--line);border-radius:8px;padding:16px 18px;max-width:560px;width:100%}
-  .h{font-size:18px;margin:0 0 8px}
-  .m{opacity:.8}
-  .row{margin-top:12px;display:flex;gap:8px}
-  .btn{padding:.5rem .8rem;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
+:root{--bg:#000;--fg:#eaeaea;--line:#222;--pad:10px;--hbar:44px}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.35 ui-monospace,consolas,monospace}
+.bar{position:fixed;top:0;left:0;right:0;height:var(--hbar);display:flex;align-items:center;gap:8px;
+     padding:calc(env(safe-area-inset-top) + 0px) var(--pad) 0 var(--pad);border-bottom:1px solid var(--line);
+     background:#000000e6;backdrop-filter:blur(2px);z-index:10}
+.btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
+#wrap{position:fixed;left:0;right:0;top:calc(var(--hbar) + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);padding:var(--pad);display:grid;grid-template-rows:auto 1fr;gap:10px}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.label{opacity:.75;min-width:68px}
+.inp{flex:1 1 180px;padding:.5rem .6rem;border:1px solid var(--line);background:#0f0f0f;color:var(--fg);border-radius:6px}
+.genders{display:flex;gap:6px}
+.genders .btn{height:auto;padding:.45rem .7rem}
+.kb{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+.kb button{padding:.55rem 0;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px}
+ small.hint{opacity:.65}
+.list{display:flex;gap:6px;flex-wrap:wrap}
+.badge{border:1px solid var(--line);border-radius:6px;padding:4px 6px;opacity:.9}
 </style>
 <body>
-<div class="wrap">
+<div class="bar">
+  <a class="btn" href="/">← home</a>
+  <a class="btn" href="/w0l0.html">w0l0</a>
+  <a class="btn" href="/w0l2.html">w0l2</a>
+  <button id="save" class="btn">save</button>
+  <button id="clear" class="btn">clear</button>
+</div>
+
+<div id="wrap">
   <div class="card">
-    <div class="h">w0l1 · todo</div>
-    <div class="m">0.0 · x0y0</div>
-    <div class="row"><a class="btn" href="/">home</a><a class="btn" href="/w0l0.html">terug</a></div>
+    <div class="row">
+      <div class="label">name</div>
+      <input id="name" class="inp" inputmode="latin-name" autocomplete="off" placeholder="a–z" maxlength="32">
+      <small class="hint">letters a–z (lowercase)</small>
+    </div>
+    <div class="row">
+      <div class="label">age</div>
+      <input id="age" class="inp" inputmode="numeric" autocomplete="off" placeholder="0–9" maxlength="3">
+      <small class="hint">digits 0–9</small>
+    </div>
+    <div class="row">
+      <div class="label">gender</div>
+      <div class="genders">
+        <button type="button" class="btn g" data-g="m">m</button>
+        <button type="button" class="btn g" data-g="o">o</button>
+        <button type="button" class="btn g" data-g="v">v</button>
+      </div>
+      <input id="gender" class="inp" style="max-width:60px;text-align:center" placeholder="m/o/v" maxlength="1">
+      <small class="hint">type m, o of v · or click</small>
+    </div>
+  </div>
+
+  <div class="card" id="kbwrap">
+    <div class="row" style="justify-content:space-between">
+      <div><b>click or type</b></div>
+      <small class="hint">active field: <span id="active">name</span></small>
+    </div>
+    <div class="kb" id="kb"></div>
+    <div class="row list" id="team"></div>
   </div>
 </div>
+
+<script>
+(function(){
+  // el refs
+  const el = (id)=>document.getElementById(id);
+  const name = el('name'), age = el('age'), gender = el('gender');
+  const activeLbl = el('active'), teamBox = el('team');
+  let active = name; name.focus();
+
+  // allowed sets
+  const AZ = Array.from('abcdefghijklmnopqrstuvwxyz');
+  const D9 = Array.from('0123456789');
+  const G3 = ['m','o','v'];
+
+  // enforce rules
+  function cleanName(){ name.value = (name.value||'').toLowerCase().replace(/[^a-z]/g,''); }
+  function cleanAge(){ age.value  = (age.value||'').replace(/[^0-9]/g,'').slice(0,3); }
+  function cleanGender(){ gender.value = (gender.value||'').toLowerCase().replace(/[^mov]/g,'').slice(0,1); }
+  name.addEventListener('input', cleanName);
+  age.addEventListener('input', cleanAge);
+  gender.addEventListener('input', cleanGender);
+
+  // focus tracking
+  [name,age,gender].forEach(i=>i.addEventListener('focus', ()=>{ active=i; activeLbl.textContent=i.id }));
+
+  // on-screen keyboard
+  const kb = el('kb');
+  const keys = [...AZ, ...D9, '⌫'];
+  kb.innerHTML = keys.map(k=>`<button type="button" data-k="${k}">${k}</button>`).join('');
+  kb.addEventListener('click', (e)=>{
+    const k = e.target?.dataset?.k;
+    if(!k) return;
+    if(k==='⌫'){ active.value = (active.value||'').slice(0,-1); active.dispatchEvent(new Event('input')); return; }
+    if(active===name && AZ.includes(k)){ active.value += k; }
+    else if(active===age && D9.includes(k)){ active.value += k; }
+    active.dispatchEvent(new Event('input'));
+    active.focus();
+  });
+
+  // key typing: filter live
+  window.addEventListener('keydown', (e)=>{
+    const key = e.key.toLowerCase();
+    if(active===name && !AZ.includes(key) && key!=='backspace' && key.length===1){ e.preventDefault(); }
+    if(active===age && !D9.includes(key) && key!=='backspace' && key.length===1){ e.preventDefault(); }
+    if(active===gender && !G3.includes(key) && key!=='backspace'){ e.preventDefault(); }
+    if(active===gender && G3.includes(key)){ gender.value = key; e.preventDefault(); }
+  });
+
+  // gender buttons
+  document.querySelectorAll('.g').forEach(b=>b.addEventListener('click', ()=>{ gender.value = b.dataset.g; gender.focus(); }));
+
+  // save / clear
+  function load(){ try{ return JSON.parse(localStorage.getItem('team_members')||'[]') }catch(_){ return [] } }
+  function save(arr){ localStorage.setItem('team_members', JSON.stringify(arr)) }
+  function render(){
+    const t = load();
+    teamBox.innerHTML = t.map(m=>`<span class="badge">${m.name} · ${m.age} · ${m.gender}</span>`).join('');
+  }
+  el('save').addEventListener('click', ()=>{
+    cleanName(); cleanAge(); cleanGender();
+    const nm=name.value, ag=age.value, gd=gender.value;
+    if(!nm || !ag || !G3.includes(gd)) { alert('fill: name(a–z), age(0–9), gender(m/o/v)'); return; }
+    const t=load(); t.push({name:nm, age:parseInt(ag,10), gender:gd, ts:Date.now()}); save(t); render();
+    name.value=''; age.value=''; gender.value=''; name.focus(); active=name; activeLbl.textContent='name';
+  });
+  el('clear').addEventListener('click', ()=>{ localStorage.removeItem('team_members'); render(); });
+
+  // boot
+  render();
+})();
+</script>
 </body>
 </html>
