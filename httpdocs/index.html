@@ -3,6 +3,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>the101game · choose</title>
+<style>/* caps toggle css */
+body.caps-on  #phone{ text-transform:uppercase }
+body.caps-off #phone{ text-transform:lowercase }
+</style>
+<link rel='stylesheet' href='/kukel/kukel.css'>
 <!-- BUILD VERSION AUTO -->
 <style>
   :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a }
@@ -268,7 +273,71 @@ window.addEventListener('keydown', ()=>prime(), {once:true,capture:true});
   document.addEventListener('DOMContentLoaded', function(){ initSpeed(); startTimer(true); });
 })();
 </script>
+<script src='/kukel/kukel.js' defer></script>
+<script>
+/* caps lock + red dot sync */
+(function(){
+  var ac, pre, master;
+  function initAudio(){
+    if (ac) return;
+    var C = window.AudioContext||window.webkitAudioContext; if (!C) return;
+    ac = new C();
+    pre = ac.createGain(); pre.gain.value = 3.5;
+    master = ac.createGain(); master.gain.value = 0.2;
+    pre.connect(master); master.connect(ac.destination);
+  }
+  function prime(){ try{initAudio(); if(ac&&ac.state==='suspended'&&ac.resume) return ac.resume();}catch(e){} return Promise.resolve(); }
+  function blip(freq, dur){
+    if(!ac) return; var t=ac.currentTime+0.01, o=ac.createOscillator(), g=ac.createGain();
+    o.type='square'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.9,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(pre); o.start(t); o.stop(t+dur+0.02);
+  }
+  function tik(){ prime().then(function(){ blip(950,0.08); }); }   // lower
+  function tok(){ prime().then(function(){ blip(1350,0.10); }); }  // UPPER
+
+  function getCaps(){ try{ return localStorage.getItem('caps_state')==='1'; }catch(_){ return false; } }
+  function setCaps(on){
+    try{ localStorage.setItem('caps_state', on?'1':'0'); }catch(_){}
+    document.body.classList.toggle('caps-on',  !!on);
+    document.body.classList.toggle('caps-off', !on);
+  }
+  function toggleCaps(){
+    var on = !getCaps();
+    setCaps(on);
+    if (on) tok(); else tik();
+  }
+
+  // init once DOM ready
+  function boot(){
+    // default: off -> lowercase
+    setCaps(getCaps());
+    // bind CapsLock key
+    window.addEventListener('keydown', function(e){
+      if (e.key === 'CapsLock'){ e.preventDefault(); toggleCaps(); }
+    });
+
+    // bind red dot (add extra handler; behoud bestaande toggles)
+    var rd = document.getElementById('reddot');
+    if (rd){
+      rd.addEventListener('click', function(){ toggleCaps(); }, {passive:true});
+      rd.addEventListener('keydown', function(ev){ if(ev.key==='Enter' || ev.key===' '){ ev.preventDefault(); toggleCaps(); }});
+      rd.setAttribute('aria-label', (rd.getAttribute('aria-label')||'') + ' (caps toggle)');
+      rd.setAttribute('role','button'); rd.setAttribute('tabindex','0');
+    }
+
+    // eerste user-gesture prime voor audio
+    window.addEventListener('pointerdown', function(){ prime(); }, {once:true,capture:true});
+    window.addEventListener('keydown',     function(){ prime(); }, {once:true,capture:true});
+  }
+
+  if (document.readyState==='complete' || document.readyState==='interactive') boot();
+  else document.addEventListener('DOMContentLoaded', boot, {once:true});
+})();
+</script>
 </body>
 </html>
+
+
 
 
