@@ -445,8 +445,152 @@
   window._toggleCase = toggleCase;
 })();
 </script>
+<!-- DOTS+CASES v1 START -->
+<style>
+  /* dots bottom bar */
+  .dots-bar{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom) + 16px);
+    display:flex; gap:28px; align-items:center; z-index:9999;
+    pointer-events:auto;
+  }
+  .dot{
+    width:64px; height:64px; border-radius:50%;
+    box-shadow:0 0 0 2px rgba(255,255,255,.08);
+    outline:1px solid #222; cursor:pointer; user-select:none;
+    transform:translateZ(0) scale(1); transition:transform .12s ease, box-shadow .12s ease;
+  }
+  #dot-red{  background:#e62e2e; }     /* red = english */
+  #dot-green{background:#2ee670;}     /* green = nederlands */
+  .dot.sel{ transform:scale(1.06); box-shadow:0 0 0 4px rgba(255,255,255,.12), 0 0 18px rgba(255,255,255,.12); }
+
+  .dots-label{
+    position:fixed; left:50%; transform:translateX(-50%); opacity:.75;
+    bottom:calc(env(safe-area-inset-bottom) + 92px);
+    font:14px/1.2 ui-monospace,consolas,monospace;
+  }
+
+  /* case blocks (black/yellow) */
+  .cases{
+    width:min(100vw,420px); margin:20px auto 120px auto; display:grid; gap:12px;
+    padding:0 12px;
+  }
+  .caseblk{
+    background:#000; color:#ffde59; border:1px solid #2a2a2a; border-radius:10px;
+    padding:12px 14px; font:16px/1.4 ui-monospace,consolas,monospace;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .badge{ font-size:.9rem; padding:.12rem .5rem; border:1px solid #444; border-radius:999px; color:#eaeaea }
+  .pulse{ animation:pulse .22s ease-out 1; }
+  @keyframes pulse{ 0%{transform:scale(.98)} 100%{transform:scale(1)} }
+</style>
+
+<!-- CASE blocks -->
+<div class="cases" id="cases">
+  <div class="caseblk">
+    <span class="case" id="case0">CASE 0: ENGLISH</span>
+    <span class="badge">lang</span>
+  </div>
+  <div class="caseblk">
+    <span class="case" id="case1">case 1: nederlands</span>
+    <span class="badge">lang</span>
+  </div>
+</div>
+
+<!-- DOTS bottom -->
+<div class="dots-bar" aria-label="language dots">
+  <div id="dot-red"   class="dot sel"   role="button" aria-selected="true"  title="english (red) – TIK"></div>
+  <div id="dot-green" class="dot"       role="button" aria-selected="false" title="nederlands (green) – TOK"></div>
+</div>
+<div class="dots-label">tab: switch dots · caps lock: swap case · auto → w0l0 in 30s</div>
+
+<script>
+let ac, pre, comp, master;
+function initAudio(){
+  if (ac) return;
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return;
+  ac = new C();
+  pre = ac.createGain(); pre.gain.value = 3.5;
+  comp = ac.createDynamicsCompressor();
+  comp.threshold.value=-24; comp.knee.value=12; comp.ratio.value=12; comp.attack.value=0.003; comp.release.value=0.20;
+  master = ac.createGain(); master.gain.value = 0.22;
+  pre.connect(comp); comp.connect(master); master.connect(ac.destination);
+}
+async function prime(){ try{ initAudio(); if(ac && ac.state==='suspended') await ac.resume(); }catch(_){ } }
+function tone(f,t,d,type='sine',g=0.9){
+  if(!ac) return;
+  const o=ac.createOscillator(), a=ac.createGain();
+  o.type=type; o.frequency.setValueAtTime(f,t);
+  a.gain.setValueAtTime(0,t);
+  a.gain.linearRampToValueAtTime(g,t+0.01);
+  a.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  o.connect(a); a.connect(pre);
+  o.start(t); o.stop(t+d+0.02);
+}
+function tik(){ const t=ac.currentTime+0.01; tone(1500,t,0.06,'square',0.8); }
+function tok(){ const t=ac.currentTime+0.01; tone( 900,t,0.07,'square',0.8); }
+function bass(){
+  if(!ac) return;
+  const t=ac.currentTime+0.01, o=ac.createOscillator(), g=ac.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(55,t+0.12);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1.0,t+0.008); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+  o.connect(g); g.connect(pre); o.start(t); o.stop(t+0.22);
+}
+
+/* dots */
+const red   = document.getElementById('dot-red');
+const green = document.getElementById('dot-green');
+let dotSel = 'red';
+function selectDot(which){
+  dotSel = which;
+  red.classList.toggle('sel',   which==='red');
+  green.classList.toggle('sel', which==='green');
+  red.setAttribute('aria-selected',   which==='red'?'true':'false');
+  green.setAttribute('aria-selected', which==='green'?'true':'false');
+  prime().then(()=>{ if(!ac) return; which==='red' ? tik() : tok(); });
+}
+red.addEventListener('click',  ()=>selectDot('red'));
+green.addEventListener('click',()=>selectDot('green'));
+window.addEventListener('keydown',(e)=>{ if(e.key==='Tab'){ e.preventDefault(); e.stopPropagation(); selectDot(dotSel==='red'?'green':'red'); } }, {capture:true});
+
+/* cases + caps lock */
+function setLang(lang){
+  try{ localStorage.setItem('site_lang', lang); }catch(_){}
+  const upper = (lang==='en');
+  document.querySelectorAll('.case').forEach(el=>{
+    const t = el.textContent || '';
+    el.textContent = upper ? t.toUpperCase() : t.toLowerCase();
+    el.closest('.caseblk')?.classList.add('pulse');
+    setTimeout(()=>el.closest('.caseblk')?.classList.remove('pulse'), 220);
+  });
+}
+function toggleCase(){
+  const cur = localStorage.getItem('site_lang') || 'en';
+  const next = (cur==='en') ? 'nl' : 'en';
+  setLang(next);
+  prime().then(()=>{ if(!ac) return; bass(); });
+}
+document.getElementById('case0').addEventListener('click', ()=>setLang('en'));
+document.getElementById('case1').addEventListener('click', ()=>setLang('nl'));
+window.addEventListener('keydown',(e)=>{ if(e.key==='CapsLock'){ e.preventDefault(); e.stopPropagation(); toggleCase(); } }, {capture:true});
+
+/* init + audio prime gesture */
+(function init(){
+  const L = localStorage.getItem('site_lang') || 'en';
+  setLang(L);
+  selectDot(L==='en' ? 'red' : 'green');
+})();
+window.addEventListener('pointerdown', ()=>prime(), {once:true, capture:true});
+window.addEventListener('keydown',     ()=>prime(), {once:true, capture:true});
+
+/* auto route after 30s using chosen lang */
+setTimeout(()=>{ location.assign('/w0l0.html'); }, 30000);
+</script>
+<!-- DOTS+CASES v1 END -->
 </body>
 </html>
+
 
 
 
