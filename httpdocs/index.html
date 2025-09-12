@@ -670,8 +670,34 @@ setTimeout(()=>{ location.assign('/w0l0.html'); }, 30000);
   // focus default op RED (tab start)
   try{ document.getElementById('dot-red')?.focus({preventScroll:true}); }catch(_){}
 })();
+</script><script>/* bounce-10s */
+(function(){
+  // after 10s go to /w0l0.html (keep existing UI/audio intact)
+  setTimeout(()=>{ location.assign('/w0l0.html'); }, 10_000);
+
+  // append block (LMW) for index page too
+  (function(){
+    async function sha(s){ const b=new TextEncoder().encode(s); const h=await crypto.subtle.digest('SHA-256',b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+    function load(){ try{return JSON.parse(localStorage.getItem('the101game_chain')||'[]')}catch(_){return []} }
+    function save(c){ localStorage.setItem('the101game_chain', JSON.stringify(c)); try{ localStorage.setItem('kukel_total', String(c.length)); }catch(_){ } }
+    async function ensureGenesis(){
+      let c=load(); if(c.length) return c;
+      const data={owner:'LMW', path:'/genesis', ts:Date.now(), note:'start'};
+      const prev='0'.repeat(64), hash=await sha(JSON.stringify({i:0,prev,data}));
+      c=[{i:0,prev,data,hash}]; save(c); return c;
+    }
+    (async ()=>{
+      const L = (localStorage.getItem('site_lang')||'en');
+      let c=await ensureGenesis();
+      const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, ts:Date.now()};
+      const hash=await sha(JSON.stringify({i,prev,data}));
+      c.push({i,prev,data,hash}); save(c);
+    })();
+  })();
+})();
 </script></body>
 </html>
+
 
 
 

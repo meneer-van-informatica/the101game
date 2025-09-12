@@ -1,383 +1,48 @@
 ﻿<!doctype html>
-<!-- BUILD VERSION 2 -->
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>w0l0 · mama + seconds + snare</title>
-<link rel='stylesheet' href='/kukel/kukel.css'>
+<title>w0l0 · hello</title>
 <style>
-  :root{ --phone-w:min(100vw,420px); --bg:#000; --fg:#eaeaea; --line:#2a2a2a; --h:64px }
-  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 ui-monospace,consolas,monospace}
-  #phone{width:var(--phone-w);min-height:100dvh;margin:0 auto}
-  .bar{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;
-       padding:10px;border-bottom:1px solid var(--line);background:#000000e8;backdrop-filter:blur(2px)}
-  .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .right{display:flex;gap:10px;align-items:center}
-  .btn{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);background:#111;color:var(--fg);border-radius:6px;text-decoration:none}
-  .meter input{width:120px}
-  #wrap{padding:8px}
-  #view{position:relative;width:100%;height:60vh;border:1px dashed #444;overflow:hidden;
-        background-image:
-          repeating-linear-gradient(to right, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/40)),
-          repeating-linear-gradient(to bottom, rgba(255,255,255,.10) 0 1px, transparent 1px calc(100%/400));}
-  .blk{position:absolute;left:0;top:0;width:calc(100%/40);height:calc(100%/400);outline:1px solid #555;border-radius:2px}
-  #legend{position:absolute;left:8px;right:8px;top:8px;height:6px;border-radius:3px;border:1px solid #333;opacity:.9;background:linear-gradient(90deg,hsl(0 90% 50%),hsl(120 90% 50%))}
-  #autoplay-gate{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.65);z-index:99999}
-  #autoplay-gate.show{display:grid}
-  #autoplay-gate .card{color:#eaeaea;background:#0b0b0bcc;border:1px solid #222;border-radius:12px;padding:14px 16px;text-align:center;max-width:320px}
-  #autoplay-gate .tip{opacity:.8;font-size:.9em}
+  :root{--bg:#000;--fg:#eaeaea}
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.4 ui-monospace,consolas,monospace}
+  main{min-height:100dvh;display:grid;place-items:center;padding:16px}
+  h1{font-size:clamp(36px,8vmin,64px);margin:0;text-transform:none}
+  #note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 12px);opacity:.8;font-size:.9rem}
 </style>
 <body>
-<div class='page-meter'><select id='pspeed'><option value='5'>5s</option><option value='10' selected>10s</option><option value='30'>30s</option></select><div class='pbar'><div id='pfill' class='pfill'></div><div class='pval'><span id='pval'>1.0</span></div></div></div>
-<div id="phone">
-  <div class="bar">
-    <div class="left">
-      <div class="msg" id="m1">...</div>
-      <div class="msg" id="m2">...</div>
-    </div>
-    <div class="right">
-      <span id="clock">-- -- ---- --:--:--</span>
-      <div class="meter"><span>vol</span><input id="vol" type="range" min="0" max="100" step="1" value="0"></div>
-      <a class="btn" href="/">home</a>
-    </div>
-  </div>
-  <div id='field'><div id='stack'></div></div>
-<div id="wrap">
-    <section id="view" aria-label="tetris 40x400">
-      <div id="legend" aria-hidden="true"></div>
-    </section>
-  </div>
-</div>
-
-<div id="autoplay-gate" role="dialog" aria-modal="true">
-  <div class="card">
-    <b>tap to start sound</b>
-    <div class="tip">(volume from 0 -> 100 during first block)</div>
-  </div>
-</div>
-
+<main>
+  <h1 id="greet">HELLO</h1>
+</main>
+<div id="note">back to /index.html in <b id="sec">10</b>s · sign: LMW</div>
 <script>
-/* lang + text */
+/* w0l0 greet + bounce + blockchain append (LMW) */
 (function(){
-  const L=localStorage.getItem('site_lang')||'en';
-  document.documentElement.setAttribute('lang',L);
-  function pad(n){return String(n).padStart(2,'0')}
-  function fmt(d){
-    const dd=pad(d.getDate());
-    const month=d.toLocaleString(L==='en'?'en-US':'nl-NL',{month:'long'});
-    const yyyy=d.getFullYear();
-    const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
-    return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
+  const L = (localStorage.getItem('site_lang')||'en');
+  document.documentElement.setAttribute('lang', L);
+  document.getElementById('greet').textContent = (L==='en') ? 'HELLO' : 'hallo';
+
+  // 10s countdown → index
+  let t=10; const sec=document.getElementById('sec');
+  const iv=setInterval(()=>{ t--; if (sec) sec.textContent=String(t); if(t<=0){ clearInterval(iv); location.assign('/index.html'); }},1000);
+
+  // ---- local blockchain (browser) ----
+  async function sha(s){ const b=new TextEncoder().encode(s); const h=await crypto.subtle.digest('SHA-256',b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+  function load(){ try{return JSON.parse(localStorage.getItem('the101game_chain')||'[]')}catch(_){return []} }
+  function save(c){ localStorage.setItem('the101game_chain', JSON.stringify(c)); try{ localStorage.setItem('kukel_total', String(c.length)); }catch(_){ } }
+  async function ensureGenesis(){
+    let c=load(); if(c.length) return c;
+    const data={owner:'LMW', path:'/genesis', ts:Date.now(), note:'start'};
+    const prev='0'.repeat(64); const hash=await sha(JSON.stringify({i:0,prev,data}));
+    c=[{i:0,prev,data,hash}]; save(c); return c;
   }
-  function render(){
-    const d=fmt(new Date());
-    if(L==='nl'){
-      document.getElementById('m1').textContent='hallo mama.';
-      document.getElementById('m2').textContent=('de klok zegt '+d).toLowerCase()+' · case: 1';
-    }else{
-      document.getElementById('m1').textContent='HELLO MAMA.';
-      document.getElementById('m2').textContent=('THE CLOCK SAYS '+d).toUpperCase()+' · CASE: 0';
-    }
-  }
-  setInterval(render,250); render();
-})();
-
-/* clock */
-(function(){
-  const el=document.getElementById('clock');
-  function pad(n){return String(n).padStart(2,'0')}
-  function fmt(d){
-    const L=localStorage.getItem('site_lang')||'en';
-    const dd=pad(d.getDate());
-    const month=d.toLocaleString(L==='en'?'en-US':'nl-NL',{month:'long'});
-    const yyyy=d.getFullYear();
-    const HH=pad(d.getHours()), MM=pad(d.getMinutes()), SS=pad(d.getSeconds());
-    return `${dd} ${month} ${yyyy} ${HH}:${MM}:${SS}`;
-  }
-  setInterval(()=>{ el.textContent=fmt(new Date()); }, 250);
-})();
-
-/* audio core */
-let ac, pre, comp, master;
-function initAudio(){ if(ac) return;
-  ac=new (window.AudioContext||window.webkitAudioContext)();
-  pre=ac.createGain(); pre.gain.value=4.0;
-  comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-  master=ac.createGain(); master.gain.value=0.0;
-  pre.connect(comp); comp.connect(master); master.connect(ac.destination);
-}
-function setVolume(v=0){ initAudio(); const n=Math.max(0,Math.min(100,Number(v))); master.gain.value=n/66.6; const s=document.getElementById('vol'); if(s) s.value=String(n); }
-
-/* unlock gate (uses intent from index if fresh) */
-(function(){
-  const gate=document.getElementById('autoplay-gate');
-  function show(){gate.classList.add('show')} function hide(){gate.classList.remove('show')}
-  function fresh(){ try{const ts=parseInt(localStorage.getItem('w_audio_intent_ts')||'0',10); return ts && (Date.now()-ts)<8000}catch(_){return false} }
-  async function tryStart(){ try{initAudio(); setVolume(0);}catch(_){}
-    try{ if(ac && ac.state==='suspended') await ac.resume(); }catch(_){}
-    if(ac && ac.state==='running'){ hide(); return true } show(); return false }
-  function firstTap(){ try{initAudio(); ac&&ac.resume&&ac.resume();}catch(_){}
-    hide(); window.removeEventListener('pointerdown',firstTap,true); window.removeEventListener('keydown',firstTap,true); }
-  window.addEventListener('pointerdown',firstTap,true); window.addEventListener('keydown',firstTap,true);
-  if(fresh()) { try{initAudio(); ac&&ac.resume&&ac.resume(); setVolume(0);}catch(_){ } hide(); }
-  (document.readyState==='complete'||document.readyState==='interactive') ? tryStart() : document.addEventListener('DOMContentLoaded', tryStart, {once:true});
-})();
-
-/* sound helpers (kick, snare, tick, chord) */
-function kick(at=ac.currentTime){
-  initAudio(); const o=ac.createOscillator(), g=ac.createGain();
-  o.type='sine'; o.frequency.setValueAtTime(160,at); o.frequency.exponentialRampToValueAtTime(60, at+0.12);
-  g.gain.setValueAtTime(0.9,at); g.gain.exponentialRampToValueAtTime(0.0001, at+0.14);
-  o.connect(g); g.connect(pre); o.start(at); o.stop(at+0.16);
-}
-function snare(at=ac.currentTime){
-  initAudio();
-  // white noise burst
-  const len=ac.sampleRate*0.25, buf=ac.createBuffer(1,len,ac.sampleRate), data=buf.getChannelData(0);
-  for(let i=0;i<len;i++){ data[i]=Math.random()*2-1; }
-  const src=ac.createBufferSource(); src.buffer=buf;
-  const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; bp.Q.value=0.8;
-  const hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=600;
-  const g=ac.createGain();
-  g.gain.setValueAtTime(0.9,at); g.gain.exponentialRampToValueAtTime(0.0001, at+0.18);
-  src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(pre);
-  src.start(at); src.stop(at+0.2);
-  // metal "tss" (triangle burst)
-  const o=ac.createOscillator(), g2=ac.createGain();
-  o.type='triangle'; o.frequency.setValueAtTime(5000,at);
-  g2.gain.setValueAtTime(0.35,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.18);
-  o.connect(g2); g2.connect(pre); o.start(at); o.stop(at+0.2);
-}
-function padumTss(){
-  if(!ac) initAudio();
-  const t=ac.currentTime;
-  kick(t+0.00);          // pa
-  kick(t+0.08);          // dum
-  snare(t+0.16);         // tss
-}
-const W=40,H=400; const FALL_SLOW=3000, FALL_FAST=900; const SPAWN_MS=5000;
-function freqForX(x){ const f0=261.63, span=24, semi=(x/(W-1))*span; return f0*Math.pow(2, semi/12); }
-function chord(x){ initAudio(); if(ac.state==='suspended') ac.resume(); const root=freqForX(x), t0=ac.currentTime+0.02;
-  [0,4,7].forEach((i,k)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=root*Math.pow(2,i/12);
-    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.9,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
-    o.connect(g); g.connect(pre); o.start(t0+k*0.004); o.stop(t0+0.4); });
-}
-function tickSound(x,y){ initAudio(); if(ac.state==='suspended') ac.resume(); const t=ac.currentTime, f=freqForX(x)*(0.85+0.3*((y||0)/H));
-  const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.setValueAtTime(f,t);
-  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
-  o.connect(g); g.connect(pre); o.start(t); o.stop(t+0.08);
-}
-function currentFallMs(){ const s=(new Date()).getSeconds(); const a=s/59; return FALL_SLOW + (FALL_FAST - FALL_SLOW)*a; }
-
-/* falling block visuals + landing snare */
-const view=document.getElementById('view');
-let firstLanded=false;
-function spawnAndDrop(){
-  const x=Math.floor(Math.random()*W);
-  const blk=document.createElement('div'); blk.className='blk';
-  blk.style.left=(x*100/W)+'%'; blk.style.top='0%'; blk.style.background=`hsl(${120*(x/(W-1))} 90% 50% / .65)`;
-  view.appendChild(blk);
-  chord(x);
-
-  let y=0, last=performance.now(), lastTick=-1;
-  function step(now){
-    const dt=now-last; last=now;
-    const fm=currentFallMs(); y += (H/fm)*dt;
-    if(!firstLanded){ const p=Math.max(0,Math.min(1,y/H)); setVolume(Math.round(p*100)); }
-    const phase=Math.floor(y/12); if(phase>lastTick){ lastTick=phase; tickSound(x,y); }
-    blk.style.top=(Math.min(y,H-1)*100/H)+'%';
-    if(y>=H-1){
-      if(!firstLanded){ firstLanded=true; setVolume(100); }
-      padumTss();
-      blk.remove(); return;
-    }
-    requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
-}
-
-setVolume(0); spawnAndDrop();
-const spawner=setInterval(()=>spawnAndDrop(), SPAWN_MS);
-document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
-</script>
-<script>
-/* block register */
-(function(){
-  function wrap(id, key){
-    const el = document.getElementById(id);
-    if(!el) return;
-    if(el.parentElement && el.parentElement.classList && el.parentElement.classList.contains('blk')) return; // al gewrapt
-    const w = document.createElement('div');
-    w.className = 'blk'; w.dataset.b = key;
-    el.parentNode.insertBefore(w, el);
-    w.appendChild(el);
-  }
-  function run(){
-    wrap('m1',     '0.0.0'); // HELLO/HALLO MAMA
-    wrap('m2',     '0.1.0'); // THE CLOCK SAYS / de klok zegt
-    wrap('clock',  '1.0.0'); // klok (rechts in bar)
-    // volume slider zit in .meter; geef 'm zelf een id als die nog niet bestond
-    const meter = document.querySelector('.meter'); if(meter && !meter.id) meter.id = 'meter';
-    wrap('meter',  '1.1.0'); // volume
-    const homeBtn = document.querySelector('.btn[href="/"]'); if(homeBtn && !homeBtn.id) homeBtn.id='homebtn';
-    wrap('homebtn','1.2.0'); // home
-    wrap('legend', '2.0.0'); // bovenste legend balk in viewport
-    wrap('view',   '2.1.0'); // tetris viewport zelf
-  }
-  if (document.readyState==='complete'||document.readyState==='interactive') run();
-  else document.addEventListener('DOMContentLoaded', run, {once:true});
+  (async ()=>{
+    let c=await ensureGenesis();
+    const i=c.length, prev=c[c.length-1].hash, data={owner:'LMW', path:location.pathname, lang:L, ts:Date.now()};
+    const hash=await sha(JSON.stringify({i,prev,data}));
+    c.push({i,prev,data,hash}); save(c);
+  })();
 })();
 </script>
-<script>
-/* block register */
-(function(){
-  function wrap(id, key){
-    const el = document.getElementById(id);
-    if(!el) return;
-    if(el.parentElement && el.parentElement.classList && el.parentElement.classList.contains('blk')) return; // al gewrapt
-    const w = document.createElement('div');
-    w.className = 'blk'; w.dataset.b = key;
-    el.parentNode.insertBefore(w, el);
-    w.appendChild(el);
-  }
-  function run(){
-    wrap('m1',     '0.0.0'); // HELLO/HALLO MAMA
-    wrap('m2',     '0.1.0'); // THE CLOCK SAYS / de klok zegt
-    wrap('clock',  '1.0.0'); // klok (rechts in bar)
-    // volume slider zit in .meter; geef 'm zelf een id als die nog niet bestond
-    const meter = document.querySelector('.meter'); if(meter && !meter.id) meter.id = 'meter';
-    wrap('meter',  '1.1.0'); // volume
-    const homeBtn = document.querySelector('.btn[href="/"]'); if(homeBtn && !homeBtn.id) homeBtn.id='homebtn';
-    wrap('homebtn','1.2.0'); // home
-    wrap('legend', '2.0.0'); // bovenste legend balk in viewport
-    wrap('view',   '2.1.0'); // tetris viewport zelf
-  }
-  if (document.readyState==='complete'||document.readyState==='interactive') run();
-  else document.addEventListener('DOMContentLoaded', run, {once:true});
-})();
-</script>
-<script>
-/* field stack layout */
-(function(){
-  function parseKey(k){
-    // 'laag.x.y' -> {l,x,y}
-    const m = String(k||'').split('.').map(n=>parseInt(n,10));
-    return { l: m[0]||0, x: m[1]||0, y: m[2]||0 };
-  }
-  function colorByLang(){
-    const L = localStorage.getItem('site_lang')||'en';
-    return (L==='en') ? 'green' : 'red';
-  }
-  function decorate(el){
-    // voeg meta voor label toe
-    const {l,x,y} = parseKey(el.dataset.b||'0.0.0');
-    const meta = x= · y= · kleur=;
-    el.dataset.meta = meta;
-    // zet randkleur per taal
-    el.style.borderColor = (colorByLang()==='green') ? '#2ee670' : '#e62e2e';
-  }
-  function measureTotalHeight(list){
-    // som van hoogte + gaps (8px)
-    let h = 0;
-    list.forEach(el => { h += el.getBoundingClientRect().height; });
-    h += Math.max(0, list.length-1) * 8;
-    // plus boven labelruimte ~10px
-    return h + 10;
-  }
-  function layout(){
-    const stack = document.getElementById('stack');
-    if(!stack) return;
-
-    // pak alle blok-wrappers die we eerder hebben gemaakt
-    const nodes = Array.from(document.querySelectorAll('.blk'))
-      // sluit het field/stack zelf uit als daar ook .blk in zou komen (defensief)
-      .filter(n => n.id !== 'stack' && n.id !== 'field');
-
-    // sorteer: laag, x, y
-    nodes.sort((a,b)=>{
-      const A = parseKey(a.dataset.b||'0.0.0');
-      const B = parseKey(b.dataset.b||'0.0.0');
-      return (A.l-B.l) || (A.x-B.x) || (A.y-B.y);
-    });
-
-    // label + kleur
-    nodes.forEach(decorate);
-
-    // zet alles in #stack (midden, onder elkaar)
-    nodes.forEach(n => stack.appendChild(n));
-
-    // schaal zodat het niet over de onderkant gaat
-    const field = document.getElementById('field');
-    const avail = field.getBoundingClientRect().height;
-    // tijdelijk schaal 1 om echte hoogte te meten
-    stack.style.transform = 'scale(1)';
-    const need = measureTotalHeight(nodes);
-    const scale = Math.min(1, (avail-4) / Math.max(need,1));
-    stack.style.transform = scale();
-  }
-
-  function go(){ layout(); }
-  if (document.readyState==='complete' || document.readyState==='interactive') go();
-  else document.addEventListener('DOMContentLoaded', go, {once:true});
-
-  // herlayout bij oriëntatie/resize en bij taalwissel (kleur)
-  window.addEventListener('resize', layout);
-  window.addEventListener('orientationchange', layout);
-  window.addEventListener('storage', (e)=>{ if(e.key==='site_lang') layout(); });
-})();
-</script>
-<script>window.APP_BUILD=2; try{localStorage.setItem('app_build','2')}catch(_){}</script>
-<script>(function(){
-  var keyDur = 'timer:' + location.pathname;
-  function getDur(){ try{ var v=parseInt(localStorage.getItem(keyDur)||'0',10); return (v>0?v:10);}catch(e){return 10;} }
-  function setDur(s){ try{ localStorage.setItem(keyDur, String(s)); }catch(e){} }
-
-  var ac, pre, comp, master, nextTick=0, raf=0, t0=0, DUR=10;
-  function initAudio(){ if(ac) return; var C=window.AudioContext||window.webkitAudioContext; if(!C) return;
-    ac=new C(); pre=ac.createGain(); pre.gain.value=4.0;
-    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=15; comp.ratio.value=20; comp.attack.value=0.002; comp.release.value=0.25;
-    master=ac.createGain(); master.gain.value=0.18; pre.connect(comp); comp.connect(master); master.connect(ac.destination);
-  }
-  function prime(){ try{initAudio(); if(ac&&ac.state==='suspended'&&ac.resume) return ac.resume();}catch(e){} return Promise.resolve(); }
-  function snare(at){
-    if(!ac) return; var len=ac.sampleRate*0.16, buf=ac.createBuffer(1,len,ac.sampleRate), data=buf.getChannelData(0);
-    for(var i=0;i<len;i++){ data[i]=Math.random()*2-1; }
-    var src=ac.createBufferSource(); src.buffer=buf;
-    var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; bp.Q.value=0.9;
-    var hp=ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=600;
-    var g=ac.createGain(); g.gain.setValueAtTime(0.8,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.14);
-    src.connect(bp); bp.connect(hp); hp.connect(g); g.connect(pre); src.start(at); src.stop(at+0.16);
-  }
-
-  function start(){
-    DUR=getDur();
-    var fill=document.getElementById('pfill'), val=document.getElementById('pval'), sel=document.getElementById('pspeed');
-    if(!fill||!val) return;
-    if(sel){ ['5','10','30'].forEach(function(v){ if(String(DUR)===v) sel.value=v; });
-      sel.addEventListener('change', function(){ setDur(parseInt(sel.value,10)||10); start(); }); }
-    if(raf) cancelAnimationFrame(raf); t0=performance.now(); nextTick=0;
-
-    function loop(now){
-      var frac=(now-t0)/(DUR*1000); if(frac>1) frac=1;
-      var value=1-frac; fill.style.width=(value*100)+'%'; val.textContent=value.toFixed(1);
-      var bpm=60+(240-60)*(1-value), interval=60/bpm, nowS=now/1000;
-      if(!nextTick||nowS>=nextTick){ prime().then(function(){ if(!ac) return; var t=ac.currentTime+0.02; snare(t); }); nextTick=nowS+interval; }
-      if(frac>=1){ location.assign('/w0l1.html'); return; }
-      raf=requestAnimationFrame(loop);
-    }
-    raf=requestAnimationFrame(loop);
-  }
-
-  window.addEventListener('pointerdown', function(){ try{initAudio();}catch(e){} }, {once:true,capture:true});
-  document.addEventListener('DOMContentLoaded', start);
-})();</script>
-<script src='/kukel/kukel.js' defer></script>
 </body>
 </html>
-
-
-
-
-
-
-
