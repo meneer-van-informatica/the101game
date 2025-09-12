@@ -224,6 +224,35 @@ document.getElementById('vol').oninput=(e)=>setVolume(e.target.value);
   else document.addEventListener('DOMContentLoaded', run, {once:true});
 })();
 </script>
+<script>
+/* block register */
+(function(){
+  function wrap(id, key){
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.parentElement && el.parentElement.classList && el.parentElement.classList.contains('blk')) return; // al gewrapt
+    const w = document.createElement('div');
+    w.className = 'blk'; w.dataset.b = key;
+    el.parentNode.insertBefore(w, el);
+    w.appendChild(el);
+  }
+  function run(){
+    wrap('m1',     '0.0.0'); // HELLO/HALLO MAMA
+    wrap('m2',     '0.1.0'); // THE CLOCK SAYS / de klok zegt
+    wrap('clock',  '1.0.0'); // klok (rechts in bar)
+    // volume slider zit in .meter; geef 'm zelf een id als die nog niet bestond
+    const meter = document.querySelector('.meter'); if(meter && !meter.id) meter.id = 'meter';
+    wrap('meter',  '1.1.0'); // volume
+    const homeBtn = document.querySelector('.btn[href="/"]'); if(homeBtn && !homeBtn.id) homeBtn.id='homebtn';
+    wrap('homebtn','1.2.0'); // home
+    wrap('legend', '2.0.0'); // bovenste legend balk in viewport
+    wrap('view',   '2.1.0'); // tetris viewport zelf
+  }
+  if (document.readyState==='complete'||document.readyState==='interactive') run();
+  else document.addEventListener('DOMContentLoaded', run, {once:true});
+})();
+</script>
 </body>
 </html>
+
 
