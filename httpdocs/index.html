@@ -15,6 +15,13 @@
   #lang-quick .langbtn{background:#f7f7f7;color:#111;border-color:#ccc}
 }
 </style>
+<style>/* quick-lang css */
+#lang-quick{display:flex;gap:12px;margin:.75rem 0;flex-wrap:wrap}
+#lang-quick .langbtn{flex:1 1 160px;padding:.75rem 1rem;border:1px solid #333;background:#111;color:#eaeaea;border-radius:10px;font-weight:600;text-transform:lowercase}
+@media (prefers-color-scheme:light){
+  #lang-quick .langbtn{background:#f7f7f7;color:#111;border-color:#ccc}
+}
+</style>
 <style>/* phone frame css */
 :root{ --phone-w: min(100vw, 420px); --bg:#000; --fg:#eaeaea }
 html,body{background:var(--bg);color:var(--fg)}
@@ -60,6 +67,10 @@ html,body{background:var(--bg);color:var(--fg)}
 </header>
 
   <main id='screen' aria-label='app screen'>
+<section id='lang-quick'>
+  <button id='choose-en' class='langbtn'>english</button>
+  <button id='choose-nl' class='langbtn'>nederlands</button>
+</section>
 <section id='lang-quick'>
   <button id='choose-en' class='langbtn'>english</button>
   <button id='choose-nl' class='langbtn'>nederlands</button>
@@ -255,8 +266,40 @@ html,body{background:var(--bg);color:var(--fg)}
   else document.addEventListener('DOMContentLoaded', bind, {once:true});
 })();
 </script>
+<script>
+/* quick-lang go */
+(function(){
+  function primeAudioIntent(){
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC){
+        const a = new AC(), g=a.createGain(); g.gain.value=0.0001;
+        const o=a.createOscillator(); o.type='sine'; o.frequency.value=440;
+        o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+0.01);
+        a.resume?.(); setTimeout(()=>{ try{ a.close(); }catch(_){ } }, 30);
+      }
+    }catch(_){}
+    localStorage.setItem('w_audio_intent','1');
+    localStorage.setItem('w_audio_intent_ts', String(Date.now()));
+  }
+  function choose(lang){
+    localStorage.setItem('site_lang', lang);
+    if (lang==='nl'){ localStorage.setItem('w_msg_text','hallo mama'); localStorage.setItem('w_msg_case','1'); }
+    else            { localStorage.setItem('w_msg_text','HELLO MAMA'); localStorage.setItem('w_msg_case','0'); }
+    primeAudioIntent();
+    location.assign('/w0l0.html');
+  }
+  function bind(){
+    document.getElementById('choose-en')?.addEventListener('click', ()=>choose('en'));
+    document.getElementById('choose-nl')?.addEventListener('click', ()=>choose('nl'));
+  }
+  if (document.readyState==='complete'||document.readyState==='interactive') bind();
+  else document.addEventListener('DOMContentLoaded', bind, {once:true});
+})();
+</script>
 </body>
 </html>
+
 
 
 
