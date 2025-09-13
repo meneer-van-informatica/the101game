@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<!--
+# w0l0.html - TODO 0 - DESC: minimal “HELLO/hallo” view
+# w0l0.html - TODO 1 - DESC: universal footer laden uit /specs/footer.spec
+# w0l0.html - TODO 2 - DESC: KPIs hydrateren: block=1, kukel=1, lang=[EN/nl]
+# w0l0.html - TODO 3 - DESC: toon tekst in case passend bij taal (EN→UPPER, nl→lower)
+# w0l0.html - TODO 4 - DESC: tik/tok audio (1Hz) zoals index (consistent)
+# w0l0.html - TODO 5 - DESC: terugknop naar index (optioneel)
+# w0l0.html - TODO 6 - DESC: B/W mobile-first styling
+# w0l0.html - TODO 7 - DESC: lang attribuut op <html> sync met keuze
+# w0l0.html - TODO 8 - DESC: idempotente scripts
+# w0l0.html - TODO 9 - DESC: geen auto-redirect (dit block = 1 kukel)
+# w0l0.html - TODO 10 - DESC: compact houden
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>w0l0 · hello</title>
+<style>
+  :root{ --w:min(100vw,420px); --bg:#000; --fg:#fff; --line:#fff }
+  *{ box-sizing:border-box }
+  html,body{ margin:0; background:#000; color:#fff; font:16px/1.3 ui-monospace,consolas,monospace }
+  #phone{ width:var(--w); min-height:100dvh; margin:0 auto; display:flex; flex-direction:column; padding:16px 12px }
+  header{ display:flex; justify-content:space-between; align-items:center; padding-bottom:10px }
+  a.btn{ color:#fff; text-decoration:none; border:1px solid var(--line); padding:.45rem .7rem; border-radius:8px }
+  main{ flex:1; display:grid; place-items:center }
+  .msg{ font-size:28px; letter-spacing:.5px; border:1px dashed var(--line); padding:16px 18px; border-radius:12px; text-align:center }
+  footer{ margin-top:auto }
+</style>
+<body>
+  <div id="phone">
+    <header>
+      <div>W0L0</div>
+      <a class="btn" href="/index.html" aria-label="go to index">INDEX</a>
+    </header>
+
+    <main>
+      <div id="hello" class="msg">HELLO</div>
+    </main>
+
+    <footer id="universal-footer"></footer>
+  </div>
+
+<script>
+/* language-driven message */
+(function(){
+  const L = (localStorage.getItem('site_lang')||'en');
+  document.documentElement.setAttribute('lang', L);
+  const el = document.getElementById('hello');
+  const txt = (L==='en') ? 'HELLO' : 'hallo';
+  el.textContent = txt;
+  // stylistic: keep EN uppercase, nl lowercase
+})();
+</script>
+
+<script>
+/* tik/tok audio (same as index) */
+(function(){
+  let ac, pre, comp, master, flip=0;
+  function init(){ if(ac) return;
+    const C = window.AudioContext||window.webkitAudioContext; if(!C) return;
+    ac=new C(); pre=ac.createGain(); pre.gain.value=3.2;
+    comp=ac.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=12; comp.ratio.value=12; comp.attack.value=0.003; comp.release.value=0.2;
+    master=ac.createGain(); master.gain.value=0.18;
+    pre.connect(comp); comp.connect(master); master.connect(ac.destination);
+  }
+  async function prime(){ try{ init(); if(ac && ac.state==='suspended') await ac.resume(); }catch(_){ } }
+  function tone(f,t,d){ const o=ac.createOscillator(), g=ac.createGain();
+    o.type='square'; o.frequency.value=f;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.9,t+.005); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(g); g.connect(pre); o.start(t); o.stop(t+d+.02);
+  }
+  function tick(){ if(!ac) return; const t=ac.currentTime+.01; tone(1500,t,0.05); }
+  function tock(){ if(!ac) return; const t=ac.currentTime+.01; tone(900 ,t,0.06); }
+  function loop(){ if(ac){ (flip^=1)?tick():tock(); } setTimeout(loop, 1000); }
+  addEventListener('pointerdown', ()=>prime(), {once:true,capture:true});
+  addEventListener('keydown',     ()=>prime(), {once:true,capture:true});
+  loop();
+})();
+</script>
+
+<script>
+/* universal footer loader + KPI hydrate (w0l0 = block 1, kukel 1, lang EN/nl) */
+(function(){
+  const mount='universal-footer';
+  function block(){ return 1; }
+  function kukel(){ return 1; }
+  function lang(){
+    const l=(localStorage.getItem('site_lang')||'en');
+    return (l==='en'?'EN':'nl');
+  }
+  async function load(){
+    const el = document.getElementById(mount); if(!el) return;
+    try{
+      const r = await fetch('/specs/footer.spec?v='+Date.now(), {cache:'no-store'});
+      el.innerHTML = await r.text();
+    }catch(_){ el.innerHTML = '<div style="padding:12px;text-align:center;border-top:1px dashed #fff">footer unavailable</div>'; }
+    hydrate();
+  }
+  function q(sel){ return document.getElementById(mount)?.querySelector(sel); }
+  function hydrate(){
+    if (q('[data-block]')) q('[data-block]').textContent = String(block());
+    if (q('[data-kukel]')) q('[data-kukel]').textContent = String(kukel());
+    if (q('[data-lang]'))  q('[data-lang]').textContent  = lang();
+    if (q('[data-ts]'))    q('[data-ts]').textContent    = new Date().toISOString();
+  }
+  (document.readyState==='loading')?document.addEventListener('DOMContentLoaded',load,{once:true}):load();
+})();
+</script>
+</body>
+</html>

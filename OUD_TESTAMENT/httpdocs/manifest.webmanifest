@@ -1,0 +1,9 @@
+﻿{
+  "name": "the101game",
+  "short_name": "the101game",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": []
+}

@@ -1,0 +1,23 @@
+# maak lexicon.json met w0l0 en w0l1
+Set-Location 'E:\the101game'
+$lex = @{
+  models = @{
+    W0L0 = @{
+      model = 'KISS'
+      title = @{ nl='KISS – Keep It Simple Stupid'; en='KISS – Keep It Simple Stupid' }
+      hook  = @{ nl='één klik, één tik'; en='one click, one tick' }
+      do    = @{ nl='lees de kaart en klik'; en='read the card and click' }
+      proof = @{ nl='je hoort de tik'; en='you hear the tick' }
+      next_cost = @{ nl='1 kukel'; en='1 kukel' }
+    }
+    W0L1 = @{
+      model = 'TODO'
+      title = @{ nl='TODO – Technological Order Distribution Office'; en='TODO – Technological Order Distribution Office' }
+      hook  = @{ nl='orde schept rust'; en='order creates calm' }
+      do    = @{ nl='vul één regel in je notepad'; en='write one line in notepad' }
+      proof = @{ nl='toon de regel aan je buddy'; en='show the line to your buddy' }
+      next_cost = @{ nl='2 kukel'; en='2 kukel' }
+    }
+  }
+} | ConvertTo-Json -Depth 6 -Compress
+$lex | Out-File -FilePath 'lexicon.json' -Encoding utf8
