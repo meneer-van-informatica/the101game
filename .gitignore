@@ -1,12 +1,17 @@
-﻿/venv/
-/.venv/
-/_backup/
-/vhosts/
-/cgi-bin/
-/html/
-/__pycache__/
-/the101gameengine/engine.db
-*.pyc
+# basics
 node_modules/
-!httpdocs/stippy/
-!httpdocs/stippy/*
+.DS_Store
+.env
+.env.*
+*.log
+logs/
+log.txt
+coverage/
+dist/
+tmp/
+*.map
+
+# system/editor
+.vscode/
+.idea/
+*.swp

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from flask import Flask, jsonify
 
 app = Flask(__name__)
@@ -22,3 +23,6 @@ def load_tests():
 
 if __name__ == '__main__':
     app.run(debug=True)
+=======
+# app.py (placeholder) — optional Python engine\n
+>>>>>>> 53acc28 (INIT)

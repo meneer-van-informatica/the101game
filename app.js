@@ -1,0 +1,1 @@
+// app.js (placeholder) — optional JS engine\n

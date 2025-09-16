@@ -1,0 +1,16 @@
+:root{ color-scheme:dark light; }
+*{ box-sizing:border-box; }
+body{ margin:0; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b121b; color:#e9eef2; }
+.wrap{ max-width:640px; margin:18px auto; padding:0 12px; }
+.brand{ font-weight:900; letter-spacing:.4px; margin:8px 0 14px; }
+.card{ border:1px solid #2b3440; background:#121a24; border-radius:14px; padding:14px; margin:12px 0; }
+label{ display:block; margin:0 0 6px; opacity:.9; }
+input{ width:100%; padding:.7rem .8rem; border-radius:12px; border:1px solid #2b3440; background:#0f1621; color:#e9eef2; font-size:1rem; }
+button{ margin-top:10px; padding:.7rem 1rem; border-radius:12px; border:1px solid #2b3440; background:#182333; color:#e9eef2; cursor:pointer; }
+button.ghost{ opacity:.6; }
+.small{ font-size:.85rem; opacity:.8; }
+.page-counter{ position:fixed; top:10px; left:10px; font-weight:800; opacity:.8; z-index:10; }
+@media (min-width:769px){
+  /* Desktop toont dezelfde flow (mobile-first) */
+  .wrap{ max-width:520px; }
+}

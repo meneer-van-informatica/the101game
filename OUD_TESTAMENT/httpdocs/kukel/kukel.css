@@ -1,8 +1,0 @@
-﻿#kukel-wrap{
-  position:fixed; z-index:99999;
-  top:calc(env(safe-area-inset-top) + 8px);
-  right:calc(env(safe-area-inset-right) + 10px);
-  font-weight:700; font-family: ui-monospace, consolas, monospace;
-}
-#kukel-wrap a#kukel-link{ color:#4ea3ff; text-decoration:underline; }
-#kukel-wrap #kukel-count{ color:#eaeaea; opacity:.9; margin-left:2px; }

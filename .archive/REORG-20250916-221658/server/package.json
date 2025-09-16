@@ -1,0 +1,16 @@
+{
+  "name": "the101game",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "mongodb": "^6.8.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
+

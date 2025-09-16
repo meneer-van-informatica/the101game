@@ -1,0 +1,34 @@
+.
+├── archive
+│   └── CLEAN-20250916-220936
+├── news
+├── scripts
+│   ├── clap0_ping.sh
+│   ├── clap1_schema_seed.sh
+│   ├── clap3_check_index.sh
+│   ├── clap4_kukel_test.sh
+│   ├── gen_pages.sh
+│   └── tree-clean.sh
+├── server
+│   ├── package-lock.json
+│   ├── package.json
+│   └── server.js
+├── static
+│   ├── css
+│   │   └── mvp.css
+│   ├── js
+│   │   ├── alias-gate.js
+│   │   ├── mvp.js
+│   │   └── pathchecker.js
+│   ├── pages
+│   │   ├── en
+│   │   └── nl
+│   ├── favicon.ico -> favicon.svg
+│   ├── favicon.svg
+│   └── index.html
+├── .gitattributes
+├── .gitignore
+├── CLEAN_TREE.txt
+└── log
+
+12 directories, 20 files

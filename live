@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO=~/the101game
+SRC="$REPO/static"
+DOMAIN=the101game.io
+WEBROOT=/var/www/vhosts/$DOMAIN/httpdocs
+
+# 1) Git sync
+cd "$REPO"
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+
+echo "[LIVE] Pull rebase vanaf lmw/$BRANCH"
+if ! git pull --rebase --autostash lmw "$BRANCH"; then
+  echo "[FOUT] Git rebase conflict. Los handmatig op met:"
+  echo "  cd $REPO && git status"
+  echo "  git add <files> && git rebase --continue"
+  exit 1
+fi
+
+# 2) Deploy static
+if [ -d "$SRC" ]; then
+  sudo rsync -a --delete "$SRC"/ "$WEBROOT"/
+fi
+
+# 3) Deploy VERSION.txt
+if [ -f "$REPO/VERSION.txt" ]; then
+  sudo install -m 644 "$REPO/VERSION.txt" "$WEBROOT/VERSION.txt"
+fi
+
+# 4) Restart API
+sudo systemctl restart the101game-api.service
+if systemctl is-active --quiet the101game-api.service; then
+  echo "[API] draait"
+else
+  echo "[API] niet actief!"
+fi
+
+# 5) Zet onderhoud UIT
+sudo rm -f /etc/nginx/.OFFLINE
+sudo nginx -t && sudo systemctl reload nginx
+echo "[LIVE] Site is online"
