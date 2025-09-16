@@ -24,6 +24,10 @@ app.get("/favicon.ico", (req,res)=>res.redirect(302, "/favicon.svg"));
 app.get("/favicon.ico", (req,res)=>res.redirect(302, "/favicon.svg"));
 
 
+// favicon (ico fallback -> svg)
+app.get("/favicon.ico", (req,res)=>res.redirect(302, "/favicon.svg"));
+
+
 // ---- Helpers (idempotent, globaal) -----------------------------------------
 const __H = (global.__the101helpers ||= {});
 __H.cleanAlias ||= (s => (s||'').toString().trim().slice(0,24));
