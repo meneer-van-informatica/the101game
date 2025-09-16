@@ -303,3 +303,74 @@ app.post('/api/test/null/submit', async (req,res)=>{
 // health
 app.get('/api/health', (req,res)=> res.json({ ok:true, uptime: process.uptime() }));
 // ============================================================================
+
+// [FEEDBACK v1] ---------------------------------------------------------------
+{
+  const FEED_WEIGHTS = { BACK: -1, UP: +1, FORWARD: 0.1 };
+
+  // simple in-memory rate limiter: key=(ip|alias):verb, window=1h, limit=3
+  const _RL = (global.__rl ||= new Map());
+  function allow(key, limit=3, windowMs=3600_000) {
+    const now = Date.now();
+    const b = _RL.get(key) || [];
+    const fresh = b.filter(t => now - t < windowMs);
+    if (fresh.length >= limit) return false;
+    fresh.push(now);
+    _RL.set(key, fresh);
+    return true;
+  }
+
+  // in-memory aggregate (also merge into player doc)
+  const agg = (global.__feedback ||= { byPage: new Map(), recent: [] });
+  function bump(page, kind) {
+    const rec = agg.byPage.get(page) || { back:0, up:0, forward:0, score:0 };
+    if (kind==='BACK')   rec.back++;
+    if (kind==='UP')     rec.up++;
+    if (kind==='FORWARD')rec.forward++;
+    rec.score = (rec.up * 1) + (rec.forward * 0.1) + (rec.back * -1);
+    agg.byPage.set(page, rec);
+    return rec;
+  }
+
+  // POST /api/feedback/submit  { page, kind, note? }
+  app.post('/api/feedback/submit', async (req,res)=>{
+    try{
+      const { page, kind, note='' } = req.body || {};
+      const k = String(kind||'').toUpperCase();
+      const pg = Number(page);
+      if (!Number.isFinite(pg) || pg<0) return res.status(400).json({ ok:false, error:'bad_page' });
+      if (!['BACK','UP','FORWARD'].includes(k)) return res.status(400).json({ ok:false, error:'bad_kind' });
+
+      const ip = (req.headers['x-forwarded-for']||req.socket.remoteAddress||'').toString().split(',')[0].trim();
+      const alias = ((req.session&&req.session.user&&req.session.user.alias) || (req.session&&req.session.alias) || '').trim().toLowerCase();
+      const key = `${ip}|${alias||'anon'}|fb|${pg}`;
+
+      if (!allow(key, 3, 3600_000)) return res.status(429).json({ ok:false, error:'rate_limited' });
+
+      // persist minimal breadcrumb on profile (anti-spam per page/kind)
+      const prof = (alias? await (H.read?H.read(alias):null) : null) || {};
+      const already = (((prof.feedbackGiven||{})[pg]||{})[k]||0) >= 1;
+      const patch = { 
+        feedbackGiven: { ...(prof.feedbackGiven||{}), [pg]: { ...((prof.feedbackGiven||{})[pg]||{}), [k]: (already?1:1) } }, 
+        lastFeedbackAt: new Date().toISOString()
+      };
+      if (alias && H.write) await H.write(alias, patch);
+
+      // aggregate (always)
+      const rec = bump(pg, k);
+      agg.recent.unshift({ at:new Date().toISOString(), page:pg, kind:k, alias: alias||null, ip, note: String(note||'').slice(0,200) });
+      if (agg.recent.length>100) agg.recent.length = 100;
+
+      res.json({ ok:true, page:pg, kind:k, weights: FEED_WEIGHTS, summary: rec });
+    }catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+  });
+
+  // GET /api/feedback/summary?page=2
+  app.get('/api/feedback/summary', (req,res)=>{
+    const pg = Number(req.query.page);
+    if (!Number.isFinite(pg)) return res.status(400).json({ ok:false, error:'bad_page' });
+    const rec = agg.byPage.get(pg) || { back:0, up:0, forward:0, score:0 };
+    res.json({ ok:true, page:pg, summary:rec });
+  });
+}
+// ----------------------------------------------------------------------------
