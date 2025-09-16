@@ -1,0 +1,166 @@
+/* algemene tweaks */
+:root{ --tap:56px; }
+@media (max-width:980px){
+  #hud{ left:6px; right:6px; top:6px; flex-wrap:wrap; gap:.35rem; padding:6px 8px; }
+  #counter{ min-width:auto; }
+  #stage{ margin:72px 0 80px; padding:0 6px; }
+  #stage .cols{ grid-template-columns: 1fr; gap:8px; }
+  select,button{ min-height: var(--tap); min-width: var(--tap); }
+}
+
+/* app bar onderin */
+.appbar{
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  display:flex; gap:10px; justify-content:space-between; align-items:center;
+  padding:10px; background:#0f141a; border-top:1px solid #2b3440;
+}
+.appbar .btn{
+  flex:1 1 0; display:inline-flex; justify-content:center; align-items:center;
+  min-height: var(--tap); padding:10px 12px; border:1px solid #2b3440; border-radius:12px;
+  color:#e9eef2; background:#121a24; text-decoration:none; font-weight:700;
+}
+.appbar .btn:active{ transform:translateY(1px) }
+
+/* gift modal */
+#gift-modal{ position:fixed; inset:0; display:none; place-items:center; z-index:60; background:rgba(0,0,0,.55); }
+#gift-panel{ width:min(520px,92vw); background:#0f141a; color:#e9eef2; border:1px solid #2b3440; border-radius:14px; padding:14px; }
+#gift-panel h3{ margin:0 0 10px; }
+#gift-panel .row{ display:flex; gap:8px; margin:8px 0; }
+#gift-panel input, #gift-panel select{
+  flex:1; min-height:44px; border:1px solid #2b3440; background:#121a24; color:#e9eef2; border-radius:10px; padding:8px 10px;
+}
+#gift-panel .actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+#toast{ position:fixed; bottom:calc(56px + 14px); left:50%; transform:translateX(-50%); background:#182333; color:#dff2ff; border:1px solid #2b3a52; padding:10px 12px; border-radius:10px; display:none; z-index:80; }
+/* admin badge tweaks (licht responsief) */
+#hud .badge-admin{ white-space:nowrap }
+@media (max-width:640px){ #hud .badge-admin{ font-size:11px } }
+
+/* ===== F-PATTERN FIXED BLOCKS (desktop & mobile) ===== */
+:root{
+  --rail-w: 260px;        /* desktop linkerkolom */
+  --gutter: 10px;
+  --fold-top: 64px;       /* ruimte onder HUD */
+  --hero-h: 48vh;         /* hoogte hero above-the-fold */
+}
+@media (max-width: 980px){
+  :root{ --rail-w: 0px; --hero-h: 52vh; }
+}
+
+/* viewport frame */
+.f-wrap{ position:fixed; inset:0; pointer-events:none; z-index:12; }
+.f-rail{ position:fixed; top:var(--fold-top); left:var(--gutter); width:var(--rail-w);
+         bottom:calc(64px + var(--gutter)); display:flex; flex-direction:column; gap:10px; }
+.f-rail .block{ background:#0f141a; border:1px solid #2b3440; border-radius:12px; padding:10px;
+                pointer-events:auto; }
+
+/* hero content midden (boven de vouw) */
+.f-hero{ position:fixed; top:var(--fold-top); left:calc(var(--rail-w) + var(--gutter)*2);
+         right:var(--gutter); height:var(--hero-h);
+         background:#0f141a; border:1px solid #2b3440; border-radius:14px; display:flex;
+         align-items:center; justify-content:center; padding:12px; pointer-events:auto; }
+
+/* tweede rij blok (onder hero), nog steeds above-the-fold */
+.f-secondary{ position:fixed; top:calc(var(--fold-top) + var(--hero-h) + var(--gutter));
+              left:calc(var(--rail-w) + var(--gutter)*2); right:var(--gutter);
+              height:calc(100vh - (var(--fold-top) + var(--hero-h) + var(--gutter)) - (56px + 12px));
+              display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+@media (max-width: 980px){
+  .f-rail{ display:none; }
+  .f-secondary{ grid-template-columns: 1fr; height:calc(28vh - 12px); }
+}
+
+/* generieke card */
+.block{ background:#0f141a; border:1px solid #2b3440; border-radius:12px; padding:10px; }
+
+/* IDEEËNBUS knop (linksonder) */
+#idea-inbox-btn{
+  position:fixed; left:10px; bottom:74px; z-index:60;
+  background:#121a24; border:1px solid #2b3440; color:#e9eef2;
+  border-radius:12px; padding:10px 12px; pointer-events:auto; font-weight:700;
+}
+#idea-modal{ position:fixed; inset:0; display:none; place-items:center; z-index:70;
+             background:rgba(0,0,0,.55); }
+#idea-panel{ width:min(520px,92vw); background:#0f141a; color:#e9eef2; border:1px solid #2b3440;
+             border-radius:14px; padding:14px; }
+
+/* Popup titel die we op "LUIE" max-fitten */
+.fit-luie{
+  display:block; text-align:center; line-height:1.05;
+  /* font-size wordt door JS gezet op basis van containerbreedte en 'LUIE' */
+  word-break:keep-all;
+  margin:0; /* JS zet horizontale marge 1% */
+}
+
+/* ===== F-PATTERN FIXED BLOCKS (desktop & mobile) ===== */
+:root{
+  --rail-w: 260px;        /* desktop linkerkolom */
+  --gutter: 10px;
+  --fold-top: 64px;       /* ruimte onder HUD */
+  --hero-h: 48vh;         /* hoogte hero above-the-fold */
+}
+@media (max-width: 980px){
+  :root{ --rail-w: 0px; --hero-h: 52vh; }
+}
+
+/* viewport frame */
+.f-wrap{ position:fixed; inset:0; pointer-events:none; z-index:12; }
+.f-rail{ position:fixed; top:var(--fold-top); left:var(--gutter); width:var(--rail-w);
+         bottom:calc(64px + var(--gutter)); display:flex; flex-direction:column; gap:10px; }
+.f-rail .block{ background:#0f141a; border:1px solid #2b3440; border-radius:12px; padding:10px;
+                pointer-events:auto; }
+
+/* hero content midden (boven de vouw) */
+.f-hero{ position:fixed; top:var(--fold-top); left:calc(var(--rail-w) + var(--gutter)*2);
+         right:var(--gutter); height:var(--hero-h);
+         background:#0f141a; border:1px solid #2b3440; border-radius:14px; display:flex;
+         align-items:center; justify-content:center; padding:12px; pointer-events:auto; }
+
+/* tweede rij blok (onder hero), nog steeds above-the-fold */
+.f-secondary{ position:fixed; top:calc(var(--fold-top) + var(--hero-h) + var(--gutter));
+              left:calc(var(--rail-w) + var(--gutter)*2); right:var(--gutter);
+              height:calc(100vh - (var(--fold-top) + var(--hero-h) + var(--gutter)) - (56px + 12px));
+              display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+@media (max-width: 980px){
+  .f-rail{ display:none; }
+  .f-secondary{ grid-template-columns: 1fr; height:calc(28vh - 12px); }
+}
+
+/* generieke card */
+.block{ background:#0f141a; border:1px solid #2b3440; border-radius:12px; padding:10px; }
+
+/* IDEEËNBUS knop (linksonder) */
+#idea-inbox-btn{
+  position:fixed; left:10px; bottom:74px; z-index:60;
+  background:#121a24; border:1px solid #2b3440; color:#e9eef2;
+  border-radius:12px; padding:10px 12px; pointer-events:auto; font-weight:700;
+}
+#idea-modal{ position:fixed; inset:0; display:none; place-items:center; z-index:70;
+             background:rgba(0,0,0,.55); }
+#idea-panel{ width:min(520px,92vw); background:#0f141a; color:#e9eef2; border:1px solid #2b3440;
+             border-radius:14px; padding:14px; }
+
+/* Popup titel die we op "LUIE" max-fitten */
+.fit-luie{
+  display:block; text-align:center; line-height:1.05;
+  /* font-size wordt door JS gezet op basis van containerbreedte en 'LUIE' */
+  word-break:keep-all;
+  margin:0; /* JS zet horizontale marge 1% */
+}
+
+/* center headline with 1% gutters */
+.center-block{
+  margin: 0 1%;
+  display:flex; align-items:center; justify-content:center;
+  text-align:center;
+}
+.center-block .xl{
+  font-weight:900; letter-spacing:.5px; line-height:1.02;
+  font-size: clamp(32px, 7.5vw, 64px);
+  word-break: break-word;
+  max-width: 14ch; /* LUIE past altijd */
+}
+
+/* tighter mobile paddings */
+@media (max-width:640px){
+  #stage{ margin:64px 0 84px; }
+}

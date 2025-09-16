@@ -1,4 +1,112 @@
-\
-<!doctype html><meta charset="utf-8"><title>the101game</title>
-<h1>the101game</h1><p>A=PageDown, F=PageUp</p>
-<script src="/static/js/input.js"></script>
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">" content="width=device-width, initial-scale=1.0"/>
+  <script>document.documentElement.setAttribute("data-app","loading");window.addEventListener("load",()=>document.documentElement.removeAttribute("data-app"));</script>
+  <title>the101game.io</title>
+  <script defer src="/js/auth.js"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 128 128%27%3E%3Crect width=%27128%27 height=%27128%27 rx=%2724%27 fill=%27%230b0e11%27/%3E%3Ctext x=%2750%25%27 y=%2762%25%27 font-size=%2772%27 text-anchor=%27middle%27 fill=%27%23e9eef2%27%3E101%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/anti-fouc.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    :root{ --bg:#0b0e11; --fg:#e9eef2; --glass:#ffffff24; --line:#2b3440; }
+    html,body{height:100%}
+    body{ margin:0; background:var(--bg); color:var(--fg);
+      font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+
+    /* HUD */
+    #hud{ position:fixed; top:8px; left:8px; z-index:30; display:flex; gap:.5rem; align-items:center;
+      background:var(--glass); border:1px solid var(--line); border-radius:12px;
+      backdrop-filter:saturate(1.1) blur(2px); padding:6px 10px; font-weight:700; }
+    #counter{ min-width:120px; display:inline-block; }
+    select,button{ background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:4px 8px; }
+    button{ cursor:pointer }
+
+    /* Panels */
+    #board{ position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:25; display:none; align-items:center; justify-content:center; }
+    #board .panel{ width:min(920px,92vw); max-height:84vh; overflow:auto; background:#0f141a; border:1px solid var(--line);
+      border-radius:14px; padding:16px; }
+    #board .grid{ display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); }
+    .card{ background:#121821; border:1px solid #283244; border-radius:10px; padding:10px; }
+
+    /* Layout: code | run */
+    #stage{ margin:64px auto 64px; max-width:1400px; padding:0 12px; }
+    #stage .cols{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    #code{ background:#0f141a; border:1px solid var(--line); border-radius:12px; padding:12px; min-height:40vh; overflow:auto; white-space:pre; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    #run{ background:#0f141a; border:1px solid var(--line); border-radius:12px; min-height:40vh; overflow:hidden; }
+    iframe.sandbox{ width:100%; height:100%; border:0; background:#0b0e11; }
+
+    /* Loader */
+    #loader{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.88); color:#fff; z-index:9999; transition:opacity .35s; }
+    #loader .box{ text-align:center; white-space:pre-wrap; padding:18px 22px; border-radius:12px; background:#ffffff18; border:1px solid #ffffff2c; }
+
+    /* Kukel */
+    #kukel{ position:fixed; right:12px; bottom:12px; z-index:40; background:#1c2a3a; border:1px solid #2d415a; border-radius:16px; padding:10px 14px; cursor:pointer; }
+
+    @media (max-width:980px){ #stage .cols{ grid-template-columns: 1fr; } }
+    a{ color:#8cd1ff }
+  </style>
+</head>
+<body>
+  <!-- HUD -->
+  <div id="hud">
+    <span id="counter">0000 / 5200</span>
+    <small id="alias-tag"></small>
+    <select id="lang">
+      <option value="nl">nl</option>
+      <option value="en">en</option>
+    </select>
+    <button id="track-toggle" title="toggle tracking">online: OFF</button>
+    <button id="menu-btn" title="scorebord">menu</button>
+    <button id="goto-btn" title="ga naar pagina">go to</button>
+  </div>
+
+  <!-- Scorebord -->
+  <div id="board">
+    <div class="panel">
+      <h3>Scorebord · <span id="online-count">0 online</span></h3>
+      <div class="grid" id="by-page"></div>
+      <details style="margin-top:10px">
+        <summary>lijst</summary>
+        <ul id="online-list"></ul>
+      </details>
+    </div>
+  </div>
+
+  <!-- Loader (SRT scene0) -->
+  <div id="loader"><div class="box">
+    <div id="loader-line" style="font-weight:800; font-size:48px">Loading…</div>
+    <div id="loader-sub" style="opacity:.85">Scene 0 · edit /scene0.srt</div>
+  </div></div>
+
+  <!-- Stage: links code, rechts uitvoering -->
+  <div id="stage">
+    <div class="cols">
+      <pre id="code"><em>geen code</em></pre>
+      <div id="run"><iframe class="sandbox" id="sandbox"></iframe></div>
+    </div>
+    <div id="page" style="margin-top:16px"></div>
+  </div>
+
+  <!-- Kukel -->
+  <button id="kukel">KUKEL: <span id="kukel-balance">0</span></button>
+
+  <!-- Scripts -->
+  <script defer src="/socket.io/socket.io.js"></script>
+  <script defer src="/js/loader.js"></script>
+  <script defer src="/js/api.js"></script>
+  <script defer src="/js/scoreboard.js"></script>
+  <script defer src="/js/pong.js"></script>
+  <script defer src="/js/pages.js"></script>
+  <script defer src="/js/clock.js"></script>
+  <script defer src="/js/music.js"></script>
+  <script defer src="/js/lobby.js"></script>
+  <script defer src="/js/fpattern.js"></script>
+  <script defer src="/js/pager.js"></script>
+  <script defer src="/js/test-null.js"></script>
+  <script defer src="/js/contact.js"></script>
+</body>
+</html>
+

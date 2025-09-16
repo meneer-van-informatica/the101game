@@ -10,3 +10,19 @@
 node_modules/
 !httpdocs/stippy/
 !httpdocs/stippy/*
+# the101game
+node_modules/
+npm-debug.log*
+logs/
+*.log
+*.pid
+.DS_Store
+.env
+.env.*
+/tmp/
+/dist/
+/build/
+# systemd artefacts
+/*.service
+server/node_modules/
+*.service

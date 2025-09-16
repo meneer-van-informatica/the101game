@@ -1,0 +1,148 @@
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
+const PORT = process.env.PORT || 3002;
+const app = express();
+app.use(express.json());
+app.use(express.static('/the101game/static', { maxAge: 0 }));
+
+// ---- Helpers (idempotent, globaal) -----------------------------------------
+const __H = (global.__the101helpers ||= {});
+__H.cleanAlias ||= (s => (s||'').toString().trim().slice(0,24));
+__H.nowIso     ||= (() => new Date().toISOString());
+__H.mem        ||= (global.mem ||= new Map());              // alias -> doc
+__H.ideas      ||= (global.ideas ||= []);                   // ideeënbus (array)
+__H.write      ||= async function(alias, patch){
+  const a = __H.cleanAlias(alias);
+  const cur = __H.mem.get(a) || { alias:a, kukel:0, lastSeenAt:null, page:0, online:false };
+  Object.assign(cur, patch);
+  __H.mem.set(a, cur);
+  return cur;
+};
+if (!global.cleanAlias) global.cleanAlias = __H.cleanAlias;
+if (!global.write)      global.write      = __H.write;
+// ----------------------------------------------------------------------------
+
+// ---- Health / smoke ---------------------------------------------------------
+app.get('/healthz', (req,res)=> res.json({ok:true, time:__H.nowIso()}));
+
+// ---- Demo status endpoint gebruikt door je loader ---------------------------
+app.get('/get-test-status', (req,res)=>{
+  const alias = __H.cleanAlias(req.query.alias||'');
+  const status = alias.toLowerCase().startsWith('ok') ? 'ready' : 'pending';
+  res.json({ status });
+});
+
+// ---- Profielen / presence ---------------------------------------------------
+app.post('/api/profile/hello', async (req,res)=>{
+  const { alias, page=0, consentOnline=false } = (req.body||{});
+  const a = __H.cleanAlias(alias);
+  if (!a) return res.status(400).json({ ok:false, error:'alias required' });
+  const now = __H.nowIso();
+  const doc = await __H.write(a, {
+    page: Number.isFinite(+page) ? +page : 0,
+    online: !!consentOnline,
+    lastSeenAt: now,
+    lastLoginAt: now
+  });
+  res.json({ ok:true, profile: doc });
+});
+
+app.get('/api/profile', (req,res)=>{
+  const a = __H.cleanAlias(req.query.alias||'');
+  if (!a) return res.status(400).json({ ok:false, error:'alias required' });
+  const doc = __H.mem.get(a) || null;
+  res.json({ ok:true, profile: doc });
+});
+
+app.post('/api/profile/logout', async (req,res)=>{
+  const a = __H.cleanAlias((req.body||{}).alias);
+  if (!a) return res.status(400).json({ ok:false, error:'alias required' });
+  const doc = await __H.write(a, { online:false, lastLogoutAt: __H.nowIso() });
+  res.json({ ok:true, profile: doc });
+});
+
+// ---- Aliassen + KUKEL gifts -------------------------------------------------
+app.get('/api/aliases', (req,res)=>{
+  const arr = [...__H.mem.values()].slice(0,2000)
+    .map(({alias,kukel,online,lastSeenAt,page})=>({alias,kukel,online,lastSeenAt,page}));
+  res.json({ ok:true, aliases: arr });
+});
+
+app.post('/api/kukel/gift', async (req,res)=>{
+  const { from, to, amount } = (req.body||{});
+  const f = __H.cleanAlias(from), t = __H.cleanAlias(to);
+  const amt = Math.floor(Number(amount));
+  if (!f || !t || f===t) return res.status(400).json({ ok:false, error:'bad from/to' });
+  if (!(amt>=1))        return res.status(400).json({ ok:false, error:'bad amount' });
+
+  const F = await __H.write(f, {}); const T = await __H.write(t, {});
+  if ((F.kukel||0) < amt) return res.status(400).json({ ok:false, error:'insufficient balance' });
+
+  F.kukel = (F.kukel||0) - amt;
+  T.kukel = (T.kukel||0) + amt;
+  await __H.write(f, F); await __H.write(t, T);
+
+  res.json({ ok:true, from:{alias:f,kukel:F.kukel}, to:{alias:t,kukel:T.kukel} });
+});
+
+// ---- Ideeënbus --------------------------------------------------------------
+app.get('/api/ideas', (req,res)=>{
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit||50)));
+  res.json({ ok:true, ideas: __H.ideas.slice(-limit) });
+});
+app.get('/api/ideas/stats', (req,res)=>{
+  const tot = __H.ideas.length;
+  const kinds = __H.ideas.reduce((m,it)=> (m[it.kind]=(m[it.kind]||0)+1, m), {});
+  res.json({ ok:true, total: tot, kinds });
+});
+app.post('/api/ideas', (req,res)=>{
+  const { alias, kind='tip', text='' } = (req.body||{});
+  const a = __H.cleanAlias(alias);
+  const k = ['tip','top'].includes((kind||'').toLowerCase()) ? kind.toLowerCase() : 'tip';
+  const t = (text||'').toString().trim();
+  if (!a || !t) return res.status(400).json({ ok:false, error:'alias and text required' });
+  const item = { id: (__H.ideas.length+1), alias:a, kind:k, text:t, time: __H.nowIso() };
+  __H.ideas.push(item);
+  res.json({ ok:true, idea:item });
+});
+
+// ---- Socket.IO (lichtgewicht lobby) ----------------------------------------
+const http = createServer(app);
+const io = new Server(http, { cors: { origin: true, methods: ['GET','POST'] } });
+
+io.on('connection', (socket)=>{
+  // markeer basic presence zodra client 'hello' emit
+  socket.on('hello', async (p={})=>{
+    const a = __H.cleanAlias(p.alias||'');
+    if (!a) return;
+    await __H.write(a, { online: !!p.online, lastSeenAt: __H.nowIso() });
+    socket.join('lobby');
+    io.to('lobby').emit('presence', { alias:a, online:true, at: __H.nowIso() });
+  });
+  socket.on('disconnect', ()=> {
+    // laat presence aan API kant doen; hier geen zware writes
+  });
+});
+
+// ---- Start ------------------------------------------------------------------
+http.listen(PORT, ()=> {
+  console.log('the101game realtime on :' + PORT);
+});
+
+// --- profile: page progress --------------------------------------------------
+app.post('/api/profile/page', async (req,res)=>{
+  try{
+    const { alias, page } = (req.body||{});
+    const a = (global.cleanAlias||((s)=> (s||'').toString().trim().slice(0,24)))(alias);
+    const p = Number(page);
+    if (!a || !Number.isFinite(p) || p < -1) return res.status(400).json({ ok:false, error:'bad alias/page' });
+    const now = (global.__the101helpers?.nowIso ? global.__the101helpers.nowIso() : new Date().toISOString());
+    const doc = (global.write ? await global.write(a, { page:p, lastSeenAt: now }) : { alias:a, page:p, lastSeenAt: now });
+    res.json({ ok:true, profile:{ alias:a, page:doc.page, lastSeenAt:doc.lastSeenAt } });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+// --- favicon: avoid 404 noise ------------------------------------------------
+app.get('/favicon.ico', (req,res)=> res.status(204).end());

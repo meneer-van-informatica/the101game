@@ -1,0 +1,411 @@
+// the101game · realtime + profiel API + static voor pages/labs
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const { randomUUID } = require('crypto');
+const { MongoClient } = require('mongodb');
+
+const PORT = process.env.PORT || 3002;
+const MONGO_URL = process.env.MONGO_URL || 'mongodb://127.0.0.1:27017';
+const DB_NAME   = process.env.MONGO_DB  || 'the101game';
+const COLL      = 'players';
+const ONLINE_GRACE_MS = 35_000;
+
+const app = express();
+app.use(express.json());
+app.use(express.json({ limit: '512kb' }));
+// static assets
+app.use(express.static('/the101game/static', { maxAge: 0 })); // serves /, /js, /css, /scene0.srt, etc.
+
+// --- Mongo init (fallback memory) ---
+let players = null;
+const mem = new Map(); // alias -> record
+
+(async () => {
+  try {
+    const cli = new MongoClient(MONGO_URL, { serverSelectionTimeoutMS: 1500 });
+    await cli.connect();
+    const col = cli.db(DB_NAME).collection(COLL);
+    await col.createIndex({ alias: 1 }, { unique: true });
+    players = col;
+    console.log('[mongo] connected');
+  } catch (e) {
+    players = null;
+    console.warn('[mongo] OFF (memory mode):', e.message || e);
+  }
+})();
+
+const now = () => new Date();
+const cleanAlias = s => (s ? String(s).trim().slice(0,24) : 'Player');
+
+async function read(alias){
+  alias = cleanAlias(alias);
+  if (players) return await players.findOne({ alias }, { projection: { _id: 0 }});
+  return mem.get(alias) || null;
+}
+async function _write(alias, patch){
+  alias = cleanAlias(alias);
+  if (players) {
+    await players.updateOne(
+      { alias },
+      {
+        $setOnInsert: { alias, createdAt: now(), kukel: 0, sessions: 0, totalMs: 0 },
+        $set: patch
+      },
+      { upsert: true }
+    );
+  } else {
+    const cur = mem.get(alias) || { alias, createdAt: now(), kukel: 0, sessions: 0, totalMs: 0 };
+    Object.assign(cur, patch);
+    mem.set(alias, cur);
+  }
+  return { ok: true };
+}
+
+// demo compat
+app.get('/get-test-status', (req,res)=>{
+  const alias = cleanAlias(req.query.alias || 'Player');
+  res.json({ status: alias.toLowerCase().startsWith('ok') ? 'ready' : 'pending' });
+});
+
+// --- profiel API ---
+app.post('/api/profile/hello', async (req,res)=>{
+  try {
+    const { alias, page=0, consentOnline=false } = req.body || {};
+    const a = cleanAlias(alias);
+    const doc = await read(a);
+    const set = {
+      lastLoginAt: now(),
+      sessionStartAt: now(),
+      lastPage: Number(page)||0,
+      consentOnline: !!consentOnline
+    };
+    if (set.consentOnline) set.lastSeenAt = now();
+    let $inc = {};
+    if (players) {
+      $inc = { sessions: 1 };
+      await players.updateOne(
+        { alias: a },
+        { $setOnInsert: { alias:a, createdAt: now(), kukel:0, totalMs:0, sessions:0 }, $set: set, $inc },
+        { upsert: true }
+      );
+    } else {
+      const cur = doc || { alias:a, createdAt: now(), kukel:0, totalMs:0, sessions:0 };
+      cur.sessions = (cur.sessions||0)+1;
+      Object.assign(cur,set);
+      mem.set(a,cur);
+    }
+    res.json({ ok:true });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.post('/api/profile/page', async (req,res)=>{
+  try {
+    const { alias, page } = req.body || {};
+    if (!Number.isFinite(page)) return res.status(400).json({ ok:false, error:'bad page' });
+    const doc = await read(alias);
+    const patch = { lastPage: page };
+    if (doc?.consentOnline) patch.lastSeenAt = now();
+    await write(alias, patch);
+    res.json({ ok:true });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.post('/api/profile/online', async (req,res)=>{
+  try {
+    const { alias, consentOnline } = req.body || {};
+    const patch = { consentOnline: !!consentOnline };
+    if (patch.consentOnline) patch.lastSeenAt = now();
+    await write(alias, patch);
+    res.json({ ok:true });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.post('/api/profile/logout', async (req,res)=>{
+  try {
+    const { alias } = req.body || {};
+    const doc = await read(alias);
+    const patch = { lastLogoutAt: now(), sessionStartAt: null };
+    if (doc?.sessionStartAt) {
+      const dur = Math.max(0, now() - new Date(doc.sessionStartAt));
+      patch.totalMs = (doc.totalMs || 0) + dur;
+    }
+    await write(alias, patch);
+    res.json({ ok:true });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.post('/api/profile/ping', async (req,res)=>{
+  try {
+    const { alias, page } = req.body || {};
+    const patch = { lastSeenAt: now() };
+    if (Number.isFinite(page)) patch.lastPage = page;
+    await write(alias, patch);
+    res.json({ ok:true });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.get('/api/profile', async (req,res)=>{
+  try {
+    const { alias } = req.query || {};
+    const doc = await read(alias);
+    res.json({ ok:true, profile: doc || null });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+// online summary
+app.get('/api/online/summary', async (req,res)=>{
+  try {
+    const since = new Date(Date.now()-ONLINE_GRACE_MS);
+    let list = [];
+    if (players) {
+      list = await players.find({ consentOnline:true, lastSeenAt:{ $gte: since } },
+        { projection: { _id:0, alias:1, lastPage:1, lastSeenAt:1 } }).toArray();
+    } else {
+      for (const v of mem.values()) {
+        if (v.consentOnline && v.lastSeenAt && new Date(v.lastSeenAt) >= since) {
+          list.push({ alias:v.alias, lastPage:v.lastPage||0, lastSeenAt:v.lastSeenAt });
+        }
+      }
+    }
+    const byPage = {};
+    for (const u of list) byPage[u.lastPage ?? 0] = (byPage[u.lastPage ?? 0] || 0) + 1;
+    res.json({ ok:true, onlineCount:list.length, byPage, list });
+  } catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+// profiel html
+app.get('/u/:alias', (req,res)=> res.sendFile('/the101game/static/profile.html'));
+
+// socket.io (pong komt later)
+const http = createServer(app);
+new Server(http, { cors:{ origin:true, methods:['GET','POST'] } })
+
+// [HELPERS v2] single authoritative helpers
+const __H = (global.__the101helpers ||= {});
+__H.cleanAlias ||= (s => (s||"").toString().trim().slice(0,24));
+__H.write ||= async function(alias, patch){
+  const a = __H.cleanAlias(alias);
+  if (global.players){
+    await global.players.updateOne({ alias:a }, { $set: { alias:a, ...patch } }, { upsert:true });
+  } else {
+    const cur = (global.mem ||= new Map()).get(a) || { alias:a, kukel:0, lastSeenAt:null };
+    Object.assign(cur, patch);
+    global.mem.set(a, cur);
+  }
+}
+const cleanAlias = __H.cleanAlias;
+const write      = __H.write;
+// [/HELPERS v2]
+
+// === helpers: single source of truth (idempotent) ===
+global.mem ??= new Map();
+global.players ??= null; // set naar Mongo collection zodra beschikbaar
+const cleanAlias = global.cleanAlias ||= (s=>String(s||"").trim().slice(0,24));
+const write = global.write ||= (async (alias, patch)=>{
+  const a = cleanAlias(alias);
+  if (global.players){
+    await global.players.updateOne({ alias:a }, { $set:{ alias:a, ...patch } }, { upsert:true });
+  } else {
+    const cur = global.mem.get(a) || { alias:a, kukel:0, lastSeenAt:null };
+    Object.assign(cur, patch);
+    global.mem.set(a, cur);
+  }
+});
+// =====================================================
+
+  .on('connection', (socket)=>{ socket.data.id = randomUUID().slice(0,8); });
+
+http.listen(PORT, ()=> console.log('the101game realtime on :' + PORT));
+
+
+// --- KUKEL: alias list + gift API ------------------------------------------
+app.get('/api/aliases', async (req,res)=>{
+  try{
+    let arr = [];
+    if (players) {
+      arr = await players.find({}, { projection:{ _id:0, alias:1, kukel:1, lastSeenAt:1 } })
+                         .limit(2000).toArray();
+    } else {
+      for (const v of mem.values()) arr.push({ alias:v.alias, kukel:v.kukel||0, lastSeenAt:v.lastSeenAt||null });
+    }
+    res.json({ ok:true, aliases: arr });
+  }catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.post('/api/kukel/gift', async (req,res)=>{
+  try{
+    const { from, to, amount } = req.body || {};
+    const f = cleanAlias(from), t = cleanAlias(to);
+    const amt = Math.floor(Number(amount));
+    if (!f || !t || f===t) return res.status(400).json({ ok:false, error:'bad from/to' });
+    if (!(amt>=1))        return res.status(400).json({ ok:false, error:'bad amount' });
+
+    // ensure docs exist
+    await write(f, {}); await write(t, {});
+
+    if (players){
+      // try debit atomically on sender; require sufficient balance
+      const deb = await players.updateOne({ alias:f, kukel:{ $gte: amt } }, { $inc:{ kukel: -amt } });
+      if (deb.matchedCount !== 1 || deb.modifiedCount !== 1){
+        return res.status(400).json({ ok:false, error:'insufficient balance' });
+      }
+      await players.updateOne({ alias:t }, { $inc:{ kukel: amt } });
+      await players.db.collection('gifts').insertOne({ from:f, to:t, amount:amt, at:new Date() });
+
+      const recs = await players.find({ alias:{ $in:[f,t] } }, { projection:{ _id:0, alias:1, kukel:1 } }).toArray();
+      const balances = {}; for (const r of recs) balances[r.alias]=r.kukel||0;
+      return res.json({ ok:true, balances });
+    } else {
+      const A = mem.get(f) || { alias:f, kukel:0 }; const B = mem.get(t) || { alias:t, kukel:0 };
+      if ((A.kukel||0) < amt) return res.status(400).json({ ok:false, error:'insufficient balance' });
+      A.kukel = (A.kukel||0) - amt; B.kukel = (B.kukel||0) + amt;
+      mem.set(f,A); mem.set(t,B);
+      return res.json({ ok:true, balances: { [f]:A.kukel, [t]:B.kukel } });
+    }
+  }catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+// --- END KUKEL --------------------------------------------------------------
+
+// === PONG MATCHMAKING ===
+global.pong ??= {
+  room: 'pong-0002',
+  players: new Map(), // socket.id -> {role:'P1'|'P2', alias}
+  queue: []           // array of {alias, sid}
+};
+
+io.on('connection', (socket)=>{
+  // client hello
+  socket.on('pong:hello', ({alias,page}={})=>{
+    if (Number(page)!==2 && Number(page)!==3) return; // only our pages
+    alias = (alias||'Player').toString().slice(0,24);
+
+    if (Number(page)===3){
+      // join queue (no duplicates)
+      if (!global.pong.queue.find(q=>q.sid===socket.id)){
+        global.pong.queue.push({ alias, sid: socket.id });
+      }
+      // nothing else to do now
+      return;
+    }
+
+    // Page 2 — try to join active room
+    const P = global.pong.players;
+    const taken = [...P.values()].map(p=>p.role);
+    let role = 'P1';
+    if (!taken.includes('P1')) role='P1';
+    else if (!taken.includes('P2')) role='P2';
+    else {
+      // already full → gently suggest waiting room
+      socket.emit('pong:welcome', { room: global.pong.room, role:'SPECTATOR', hasOpponent:true });
+      return;
+    }
+
+    P.set(socket.id, { role, alias });
+    socket.join(global.pong.room);
+    const hasOpponent = (P.size>=2);
+    socket.emit('pong:welcome', { room: global.pong.room, role, hasOpponent });
+    if (hasOpponent){
+      // tell the other side someone joined
+      socket.to(global.pong.room).emit('pong:opponent-joined');
+    }
+
+    socket.on('disconnect', ()=>{
+      const me = P.get(socket.id);
+      if (me){
+        P.delete(socket.id);
+        socket.to(global.pong.room).emit('pong:update', {
+          // let remaining client fallback to bot
+          author: me.role, p1y: 0, p2y: 0
+        });
+      }
+    });
+
+    // relay state (thin server, P1 authoritative for ball)
+    socket.on('pong:state', (s)=>{
+      if (!P.has(socket.id)) return;
+      socket.to(global.pong.room).emit('pong:update', {
+        author: P.get(socket.id).role,
+        p1y: s.p1y, p2y: s.p2y, ball: s.ball
+      });
+    });
+
+    // game over → swap loser to queue, pull next from queue
+    socket.on('pong:over', ({room, loser}={})=>{
+      if (room !== global.pong.room) return;
+      const entries = [...P.entries()];
+      const loserEntry = entries.find(([sid,p])=>p.role===loser);
+      if (!loserEntry) return;
+      const [loserSid] = loserEntry;
+
+      // move loser to queue (front)
+      const cur = P.get(loserSid);
+      if (cur){
+        global.pong.queue.push({ alias: cur.alias, sid: loserSid });
+      }
+
+      // kick loser client to waiting page
+      io.to(loserSid).emit('pong:swap', { to: 3 });
+
+      // remove loser from active players
+      P.delete(loserSid);
+
+      // bring next queued player in (if any)
+      while (global.pong.queue.length){
+        const nxt = global.pong.queue.shift();
+        // if socket still connected
+        const ns = io.sockets.sockets.get(nxt.sid);
+        if (ns && !P.has(nxt.sid)){
+          // assign the freed role
+          P.set(nxt.sid, { role: loser, alias: nxt.alias });
+          ns.join(global.pong.room);
+          ns.emit('pong:welcome', { room: global.pong.room, role: loser, hasOpponent: true });
+          ns.to(global.pong.room).emit('pong:opponent-joined');
+          break;
+        }
+      }
+    });
+  });
+});
+// === END PONG MATCHMAKING ===
+
+// === IDEABOX API ===
+global.ideas ||= null; // Mongo collection (ideas) of null => memory fallback
+
+// init mem-bucket:
+global._ideas_mem ||= [];
+
+app.post('/api/ideas', async (req,res)=>{
+  try{
+    const { alias, kind, text } = req.body||{};
+    const a = cleanAlias(alias||'Anon');
+    const k = (kind||'tip').toLowerCase()==='top' ? 'top' : 'tip';
+    const t = (text||'').toString().slice(0, 2000);
+    if (!t.trim()) return res.status(400).json({ ok:false, error:'empty text' });
+
+    const doc = { alias:a, kind:k, text:t, at:new Date() };
+
+    if (global.ideas){
+      await global.ideas.insertOne(doc);
+    } else {
+      global._ideas_mem.push(doc);
+      if (_ideas_mem.length>2000) _ideas_mem.shift();
+    }
+    res.json({ ok:true });
+  }catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+
+app.get('/api/ideas/stats', async (req,res)=>{
+  try{
+    if (global.ideas){
+      const tip = await global.ideas.countDocuments({ kind:'tip' });
+      const top = await global.ideas.countDocuments({ kind:'top' });
+      return res.json({ ok:true, tip, top });
+    } else {
+      const tip = _ideas_mem.filter(x=>x.kind==='tip').length;
+      const top = _ideas_mem.filter(x=>x.kind==='top').length;
+      return res.json({ ok:true, tip, top });
+    }
+  }catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
+});
+// === /IDEEABOX API ===

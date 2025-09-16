@@ -1,6 +1,15 @@
 \
 {
-  "controls": { "A": "PageDown", "F": "PageUp" },
-  "grid": { "rows": 6, "cols": 9 },
-  "scroll": { "wrap": true, "axis": "vertical" }
+  "controls": {
+    "A": "PageDown",
+    "F": "PageUp"
+  },
+  "grid": {
+    "rows": 6,
+    "cols": 9
+  },
+  "scroll": {
+    "wrap": true,
+    "axis": "vertical"
+  }
 }

@@ -1,0 +1,2 @@
+/* Verberg layout tot app geladen is */
+html[data-app="loading"] body{ visibility:hidden }

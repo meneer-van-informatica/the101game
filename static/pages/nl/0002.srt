@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:01,000
+NL · PAGE 0002 / 5200
+
+2
+00:00:01,000 --> 00:00:02,000
+Titel van les 0002
+
+3
+00:00:02,000 --> 00:00:04,000
+Je kunt deze SRT aanpassen om de tekst/steps van de les te sturen.
+
+4
+00:00:04,000 --> 00:00:06,000
+Links zie je code, rechts de uitvoering (als er een lab-bestand bestaat).
+
