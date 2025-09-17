@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+sudo rm -f /etc/nginx/.OFFLINE
+echo "[WORK] OFFLINE vlag verwijderd"
+sudo nginx -t && sudo systemctl reload nginx
+sleep 0.7
+ss -tlnp | grep -q ':443' || sudo systemctl restart nginx
+echo "[HEAD localhost]"; curl -skI https://localhost/ | head -n6 || true
+echo "[HEAD domain]";    curl -Ik https://the101game.io/ | head -n6 || true

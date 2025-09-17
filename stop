@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+REPO=~/the101game
+DOMAIN=the101game.io
+WEBROOT=/var/www/vhosts/$DOMAIN/httpdocs
+
+sudo touch /etc/nginx/.OFFLINE
+echo "[STOP] OFFLINE vlag gezet"
+sudo nginx -t && sudo systemctl reload nginx
+
+read -rp "Geef VERS (formaat XXXX:XXXX, bv NULL:NULL): " VERS_INPUT
+VERS_INPUT_UP=$(echo "$VERS_INPUT" | tr '[:lower:]' '[:upper:]')
+if ! [[ "$VERS_INPUT_UP" =~ ^[A-Z0-9]{4}:[A-Z0-9]{4}$ ]]; then echo "[FOUT] Formaat vereist: XXXX:XXXX"; exit 2; fi
+STAMP=$(TZ=Europe/Amsterdam date +%Y-%m-%dT%H:%M:%S%z)
+cd "$REPO"; BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+grep -RIl --null 'VERS NULL:NULL' "$REPO" 2>/dev/null | xargs -0 -r sed -i "s/VERS NULL:NULL/VERS $VERS_INPUT_UP/g"
+{ echo "VERS=$VERS_INPUT_UP"; echo "STAMP=$STAMP"; echo "BRANCH=$BRANCH"; } > VERSION.txt
+git add -A
+git commit -m "$STAMP" || echo '[GIT] geen wijzigingen'
+git pull --rebase --autostash origin "$BRANCH" || true
+git push origin "$BRANCH" || true
+echo "[OK] Onderhoud actief. VERS=$VERS_INPUT_UP gepusht."

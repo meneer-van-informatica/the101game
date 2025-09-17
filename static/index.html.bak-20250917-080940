@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>the101game</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" as="style" href="/css/mvp.css">
+  <link rel="stylesheet" href="/css/mvp.css">
+</head>
+<body>
+  <main id="run">
+    <h1 class="title center-block"><span class="xl">the101game</span></h1>
+    <div id="mvp"></div>
+  </main>
+
+  <script defer src="/js/mvp.js"></script>
+  <script defer src="/js/pathchecker.js"></script>
+  <script defer src="/js/alias-gate.js"></script>
+</body>
+</html>
+
