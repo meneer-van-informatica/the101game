@@ -1,41 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-REPO=~/the101game
+REPO=/root/the101game
 SRC="$REPO/static"
 DOMAIN=the101game.io
 WEBROOT=/var/www/vhosts/$DOMAIN/httpdocs
-
-# 1) Git sync
-cd "$REPO"
-BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-
-echo "[LIVE] Pull rebase vanaf lmw/$BRANCH"
-if ! git pull --rebase --autostash lmw "$BRANCH"; then
-  echo "[WARN] Rebase conflict → force push lokale branch"
-  git rebase --abort || true
-  git push lmw "$BRANCH" --force
+# 1) Git sync (auto-fix unmerged by keeping ours once, if present)
+cd "$REPO"; BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+  echo "[LIVE] Rebase actief → keep OURS"; for f in $(git diff --name-only --diff-filter=U || true); do git checkout --ours -- "$f" || true; git add "$f" || true; done
+  git rebase --continue || git rebase --abort || true
 fi
-
+git fetch --all --prune
+git pull --rebase --autostash origin "$BRANCH" || true
 # 2) Deploy static
-if [ -d "$SRC" ]; then
-  sudo rsync -a --delete "$SRC"/ "$WEBROOT"/
-fi
-
-# 3) Deploy VERSION.txt
+[ -d "$SRC" ] && sudo rsync -a --delete "$SRC"/ "$WEBROOT"/
+# 3) TODO -> /TODO.txt
+TODO_SRC=""; for f in "$REPO"/{TODO,Todo,todo}.{md,txt} "$REPO"/{TODO,todo,README.md} 2>/dev/null; do [ -f "$f" ] && { TODO_SRC="$f"; break; }; done
+[ -n "$TODO_SRC" ] && sudo install -m 644 "$TODO_SRC" "$WEBROOT/TODO.txt" || echo "[INFO] Geen TODO"
+# 4) VERSION deploy + inject
 if [ -f "$REPO/VERSION.txt" ]; then
   sudo install -m 644 "$REPO/VERSION.txt" "$WEBROOT/VERSION.txt"
+  VERS_VAL=$(grep '^VERS=' "$REPO/VERSION.txt" | cut -d= -f2- || true)
+  [ -n "${VERS_VAL:-}" ] && sudo grep -RIl --null 'VERS NULL:NULL' "$WEBROOT" 2>/dev/null | xargs -0 -r sudo sed -i "s/VERS NULL:NULL/VERS $VERS_VAL/g"
 fi
-
-# 4) Restart API
-sudo systemctl restart the101game-api.service
-if systemctl is-active --quiet the101game-api.service; then
-  echo "[API] draait"
-else
-  echo "[API] niet actief!"
-fi
-
-# 5) Zet onderhoud UIT
-sudo rm -f /etc/nginx/.OFFLINE
+# 5) LIVE (503 UIT) + verify
+sudo rm -f /etc/nginx/.OFFLINE; echo "[LIVE] OFFLINE vlag verwijderd"
 sudo nginx -t && sudo systemctl reload nginx
-echo "[LIVE] Site is online"
+sleep 0.5
+echo "[HEAD localhost]"; curl -skI https://localhost/ | head -n6 || true
+echo "[HEAD domain]";    curl -Ik  https://the101game.io/ | head -n6 || true
