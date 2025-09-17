@@ -12,10 +12,9 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 
 echo "[LIVE] Pull rebase vanaf lmw/$BRANCH"
 if ! git pull --rebase --autostash lmw "$BRANCH"; then
-  echo "[FOUT] Git rebase conflict. Los handmatig op:"
-  echo "  cd $REPO && git status"
-  echo "  git add <files> && git rebase --continue"
-  exit 1
+  echo "[WARN] Rebase conflict → force push lokale branch"
+  git rebase --abort || true
+  git push lmw "$BRANCH" --force
 fi
 
 # 2) Deploy static
