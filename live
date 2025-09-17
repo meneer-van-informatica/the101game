@@ -2,30 +2,23 @@
 set -euo pipefail
 REPO=/root/the101game
 SRC="$REPO/static"
-DOMAIN=the101game.io
-WEBROOT=/var/www/vhosts/$DOMAIN/httpdocs
-# 1) Git sync (auto-fix unmerged by keeping ours once, if present)
-cd "$REPO"; BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
-  echo "[LIVE] Rebase actief → keep OURS"; for f in $(git diff --name-only --diff-filter=U || true); do git checkout --ours -- "$f" || true; git add "$f" || true; done
-  git rebase --continue || git rebase --abort || true
-fi
-git fetch --all --prune
-git pull --rebase --autostash origin "$BRANCH" || true
-# 2) Deploy static
+WEBROOT=/var/www/vhosts/the101game.io/httpdocs
+cd "$REPO"
+
+echo "[LIVE] Pull rebase vanaf lmw/main"
+git fetch lmw main || true
+git pull --rebase --autostash lmw main || true
+
+# Deploy static
 [ -d "$SRC" ] && sudo rsync -a --delete "$SRC"/ "$WEBROOT"/
-# 3) TODO -> /TODO.txt
-TODO_SRC=""; for f in "$REPO"/{TODO,Todo,todo}.{md,txt} "$REPO"/{TODO,todo,README.md} 2>/dev/null; do [ -f "$f" ] && { TODO_SRC="$f"; break; }; done
-[ -n "$TODO_SRC" ] && sudo install -m 644 "$TODO_SRC" "$WEBROOT/TODO.txt" || echo "[INFO] Geen TODO"
-# 4) VERSION deploy + inject
-if [ -f "$REPO/VERSION.txt" ]; then
-  sudo install -m 644 "$REPO/VERSION.txt" "$WEBROOT/VERSION.txt"
-  VERS_VAL=$(grep '^VERS=' "$REPO/VERSION.txt" | cut -d= -f2- || true)
-  [ -n "${VERS_VAL:-}" ] && sudo grep -RIl --null 'VERS NULL:NULL' "$WEBROOT" 2>/dev/null | xargs -0 -r sudo sed -i "s/VERS NULL:NULL/VERS $VERS_VAL/g"
-fi
-# 5) LIVE (503 UIT) + verify
-sudo rm -f /etc/nginx/.OFFLINE; echo "[LIVE] OFFLINE vlag verwijderd"
+
+# Deploy VERSION.txt
+[ -f "$REPO/VERSION.txt" ] && sudo install -m 644 "$REPO/VERSION.txt" "$WEBROOT/VERSION.txt"
+
+# API restart
+sudo systemctl restart the101game-api.service
+
+# OFFLINE vlag weg
+sudo rm -f /etc/nginx/.OFFLINE
 sudo nginx -t && sudo systemctl reload nginx
-sleep 0.5
-echo "[HEAD localhost]"; curl -skI https://localhost/ | head -n6 || true
-echo "[HEAD domain]";    curl -Ik  https://the101game.io/ | head -n6 || true
+echo "[LIVE] Site is online"

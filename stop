@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 REPO=/root/the101game
-# 1) Onderhoud AAN (503)
+cd "$REPO"
+
+# 1) OFFLINE vlag
 sudo touch /etc/nginx/.OFFLINE
 echo "[STOP] OFFLINE vlag gezet"
 sudo nginx -t && sudo systemctl reload nginx
-# 2) VERS vragen + commit/push
-read -rp "Geef VERS (formaat XXXX:XXXX, bv NULL:NULL): " VERS_INPUT
-VERS_INPUT_UP=$(echo "$VERS_INPUT" | tr '[:lower:]' '[:upper:]')
-[[ "$VERS_INPUT_UP" =~ ^[A-Z0-9]{4}:[A-Z0-9]{4}$ ]] || { echo "[FOUT] Formaat vereist: XXXX:XXXX"; exit 2; }
+
+# 2) VERS
+VERS=$(vers)
 STAMP=$(TZ=Europe/Amsterdam date +%Y-%m-%dT%H:%M:%S%z)
-cd "$REPO"; BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-grep -RIl --null 'VERS NULL:NULL' "$REPO" 2>/dev/null | xargs -0 -r sed -i "s/VERS NULL:NULL/VERS $VERS_INPUT_UP/g"
-{ echo "VERS=$VERS_INPUT_UP"; echo "STAMP=$STAMP"; echo "BRANCH=$BRANCH"; } > VERSION.txt
-git add -A; git commit -m "$STAMP" || echo '[GIT] geen wijzigingen'
-git pull --rebase --autostash origin "$BRANCH" || true
-git push --set-upstream origin "$BRANCH" || git push --force-with-lease origin "$BRANCH" || true
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+
+echo "VERS=$VERS" > VERSION.txt
+echo "STAMP=$STAMP" >> VERSION.txt
+echo "BRANCH=$BRANCH" >> VERSION.txt
+
+git add -A
+git commit -m "$STAMP" || echo "[GIT] geen wijzigingen"
+git pull --rebase --autostash lmw "$BRANCH" || true
+git push lmw "$BRANCH" || true
+
+echo "[OK] Onderhoud actief. VERS=$VERS gepusht."
