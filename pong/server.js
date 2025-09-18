@@ -1,223 +1,192 @@
-require('dotenv').config({ path: __dirname + '/.env' });
+/* PONG v2 — levels, wallet (kukels), aliases, pancake, scoreboard */
+require('dotenv').config({ override:true });
 const http = require('http');
-const url  = require('url');
-const { MongoClient } = require('mongodb');
-const WebSocket = require('ws');
+const express = require('express');
+const { WebSocketServer } = require('ws');
+const { MongoClient, ObjectId } = require('mongodb');
+const fs = require('fs');
+const path = require('path');
 
-/* ===== constants ===== */
-const TICK_MS = 16, BROADCAST_MS = 33;
-const WIDTH=800, HEIGHT=500, PAD_H=90, PAD_W=12, BALL_R=7;
-const PADDLE_SPEED = 6;
-const SPEED = {0:6, 1:8, 2:9, 3:10};
-const ENEMY_R = 8, ENEMY_Y = 22, ENEMY_VX = {2:4, 3:6};
-const ADVANCE_AT = 4;
+const PORT = parseInt(process.env.PORT||'3000',10);
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
+const DBNAME = process.env.MONGODB_DB || 'the101game';
 
-/* ===== mongo (retry in background, never exit) ===== */
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27018';
-const MONGODB_DB  = process.env.MONGODB_DB  || 'the101game';
-let db=null, matches=null;
-let connected = false;
-async function connectMongo() {
-  while (!connected) {
-    try {
-      const cli = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 2000 });
-      await cli.connect();
-      db = cli.db(MONGODB_DB);
-      matches = db.collection('pong_matches');
-      await matches.createIndex({ started_at: -1 });
-      connected = true;
-      console.log('[mongo] connected');
-    } catch (e) {
-      console.error('[mongo] connect failed, retrying in 3s:', String(e.message||e));
-      await new Promise(r => setTimeout(r, 3000));
-    }
-  }
-}
-connectMongo(); // fire-and-forget
+const app = express();
+app.use(express.json());
+app.use('/', express.static(path.join(__dirname,'public'), { maxAge: '3600s' }));
 
-/* ===== http + ws ===== */
-const server = http.createServer(async (req, res) => {
-  const u = url.parse(req.url, true);
-  if (u.pathname === '/pong/api/leaderboard') {
-    try {
-      if (!connected || !matches) {
-        res.writeHead(200, {'content-type':'application/json'});
-        return res.end(JSON.stringify({ ok:true, top: [], note:'db_offline' }));
-      }
-      const top = await matches.aggregate([
-        { $match: { winner: { $in: ['left','right'] } } },
-        { $group: { _id: '$winner', wins: { $sum: 1 } } },
-        { $project: { _id: 0, side: '$_id', wins: 1 } },
-        { $sort: { wins: -1 } }
-      ]).toArray();
-      res.writeHead(200, {'content-type':'application/json'});
-      return res.end(JSON.stringify({ ok:true, top }));
-    } catch (e) {
-      res.writeHead(500, {'content-type':'application/json'});
-      return res.end(JSON.stringify({ ok:false, error: String(e) }));
-    }
-  }
-  if (u.pathname === '/pong/health') {
-    res.writeHead(200, {'content-type':'text/plain'}); return res.end('ok');
-  }
-  res.writeHead(404); res.end('Not Found');
+// ---- Mongo ----
+const client = new MongoClient(MONGODB_URI);
+let db, Players, Stats, Levels;
+const LEVELS = JSON.parse(fs.readFileSync(path.join(__dirname,'data','levels.json'),'utf8'));
+
+// ---- Helpers ----
+const now = ()=>new Date();
+const aliasSan = s => String(s||'').trim().slice(0,24).replace(/[^\w\-]/g,'_') || 'test';
+
+// ---- API ----
+app.get('/health', (req,res)=> res.json({ok:true, ts:Date.now()}));
+
+app.get('/pong/api/me', async (req,res)=>{
+  const alias = aliasSan(req.headers['x-alias'] || req.query.alias || 'test');
+  const p = await Players.findOneAndUpdate(
+    { alias }, { $setOnInsert:{ alias, kukels:0, createdAt:now() } }, { upsert:true, returnDocument:'after' }
+  );
+  res.json({ ok:true, alias: p.value.alias, kukels: p.value.kukels||0 });
 });
-const wss = new WebSocket.Server({ server });
 
-/* ===== game state ===== */
-let currentLevel = 0; // 0..3, at 3 first to 4 wins then new match
-const state = {
-  l:{ y: HEIGHT/2 - PAD_H/2, up:false, down:false },
-  r:{ y: HEIGHT/2 - PAD_H/2, up:false, down:false },
-  b:{ x: WIDTH/2, y: HEIGHT/2, vx: SPEED[0], vy: SPEED[0]*0.6 },
-  e:null,
-  s:{ l:0, r:0 },
-  level: 0
+app.post('/pong/api/alias', async (req,res)=>{
+  const alias = aliasSan(req.body?.alias);
+  const p = await Players.findOneAndUpdate(
+    { alias }, { $setOnInsert:{ alias, kukels:0, createdAt:now() } }, { upsert:true, returnDocument:'after' }
+  );
+  res.json({ ok:true, alias:p.value.alias, kukels:p.value.kukels||0 });
+});
+
+app.get('/pong/api/leaderboard', async (req,res)=>{
+  const top = await Players.find({}, { projection:{_id:0, alias:1, kukels:1} })
+                           .sort({ kukels:-1, alias:1 }).limit(10).toArray();
+  res.json({ ok:true, top });
+});
+
+app.get('/pong/api/levels', (req,res)=> res.json({ ok:true, levels: LEVELS }));
+
+// ---- Game State ----
+const S = {
+  levelIdx: 0,
+  players: new Map(), // ws-> {alias, padY}
+  paddles: [{x:1,y:8,h:4},{x:40,y:8,h:4}],
+  ball: {x:21,y:10,vx:1,vy:1},
+  enemy: null,
+  scores: {A:0,B:0},
+  lastTick: Date.now(),
+  listeners: new Set(), // all websockets
 };
-const clients = new Map(); // ws -> {role, ip}
-function assignRole() {
-  const roles = [...clients.values()].map(v=>v.role);
-  if (!roles.includes('left')) return 'left';
-  if (!roles.includes('right')) return 'right';
-  return 'spec';
-}
-function fwdIp(req){ return (req.headers['x-forwarded-for']||'').split(',')[0].trim() || req.socket.remoteAddress; }
 
-/* ===== minimal persistence helpers (no-crash if db offline) ===== */
-let currentMatchId = null;
-async function ensureMatch() {
-  if (!connected || !matches) return null;
-  if (currentMatchId) return currentMatchId;
-  const left = [...clients.entries()].find(([,c]) => c.role==='left')?.[1]?.ip || null;
-  const right= [...clients.entries()].find(([,c]) => c.role==='right')?.[1]?.ip || null;
-  const r = await matches.insertOne({ started_at:new Date(), level:0, players:{left,right}, scores:{l:0,r:0}, events:[] });
-  currentMatchId = r.insertedId;
-  return currentMatchId;
-}
-async function record(ev){ if (!connected || !matches) return; if (!currentMatchId) await ensureMatch(); await matches.updateOne({ _id: currentMatchId }, { $push: { events: ev } }); }
-async function incScore(side){
-  if (!connected || !matches) return;
-  if (!currentMatchId) await ensureMatch();
-  const f = {}; f['scores.'+side] = 1;
-  await matches.updateOne({ _id: currentMatchId }, { $inc: f, $push: { events: {t:'score', side, at:new Date(), level: currentLevel } } });
+function setLevel(i){
+  S.levelIdx = Math.max(0, Math.min(LEVELS.length-1, i));
+  const L = LEVELS[S.levelIdx];
+  // enemy setup
+  if(L.enemy){
+    S.enemy = { x: (Math.random()<0.5?10:31), y: L.enemy.y, dir: 1, speed: L.enemy.speed };
+  } else S.enemy = null;
+  broadcast({ type:'state', state: view('Level '+L.code) });
 }
 
-/* ===== helpers ===== */
-function resetBall(dir = (Math.random()<0.5?-1:1)) {
-  const spd = SPEED[currentLevel] || SPEED[0];
-  state.b.x = WIDTH/2; state.b.y = HEIGHT/2;
-  const angle = (Math.random()*0.6 - 0.3);
-  state.b.vx = spd * dir;
-  state.b.vy = spd * angle;
-}
-function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
-function maybeSpawnEnemy() {
-  if (currentLevel >= 2 && !state.e) { state.e = { x: WIDTH/2, y: ENEMY_Y, vx: ENEMY_VX[currentLevel]||ENEMY_VX[2] }; }
-  if (currentLevel < 2 && state.e) state.e = null;
-}
-function enemyStep() {
-  if (!state.e) return;
-  state.e.x += state.e.vx;
-  if (state.e.x < ENEMY_R && state.e.vx < 0) state.e.vx *= -1;
-  if (state.e.x > WIDTH-ENEMY_R && state.e.vx > 0) state.e.vx *= -1;
-}
-function collideEnemyBall() {
-  if (!state.e) return false;
-  const dx = state.b.x - state.e.x, dy = state.b.y - state.e.y, R = BALL_R + ENEMY_R;
-  return (dx*dx + dy*dy) <= R*R;
-}
-async function onEnemyHit() {
-  const side = (state.b.vx > 0) ? 'l' : 'r';
-  await incScore(side);
-  await record({ t:'enemy_hit', side, at:new Date(), level: currentLevel });
-  resetBall(state.b.vx > 0 ? -1 : 1);
-}
-async function levelUp() {
-  currentLevel++; state.level = currentLevel;
-  await record({ t:'level_up', level: currentLevel, at: new Date() });
-  state.s.l = 0; state.s.r = 0;
-  maybeSpawnEnemy();
-  resetBall();
+function view(msg){
+  const L = LEVELS[S.levelIdx];
+  return {
+    msg, level: L.code,
+    ball: {...S.ball},
+    enemy: S.enemy ? {x:S.enemy.x|0, y:S.enemy.y|0} : null,
+    paddles: S.paddles.map(p=>({x:p.x,y:p.y,h:p.h}))
+  };
 }
 
-/* ===== ws ===== */
-wss.on('connection', (ws, req) => {
-  const role = assignRole();
-  clients.set(ws, { role, ip: fwdIp(req) });
-  ws.send(JSON.stringify({ t:'hello', role }));
+async function reward(alias, amount=1){
+  if(!alias) return;
+  await Players.updateOne({alias}, {$inc:{kukels:amount}});
+  const p = await Players.findOne({alias},{projection:{_id:0,alias:1,kukels:1}});
+  if(p) broadcastToAlias(alias, {type:'me', kukels:p.kukels});
+}
 
-  ws.on('message', (data) => {
-    try{
-      const msg = JSON.parse(data);
-      if (msg.t==='input') {
-        const who = clients.get(ws)?.role;
-        const p = who==='left' ? state.l : who==='right' ? state.r : null;
-        if (p) { p.up=!!msg.up; p.down=!!msg.down; }
-      } else if (msg.t==='reset') {
-        state.s.l=0; state.s.r=0; currentLevel=0; state.level=0; state.e=null; resetBall();
-        record({t:'reset', at:new Date()});
-      } else if (msg.t==='ping') {
-        ws.send(JSON.stringify({t:'pong', ts: msg.ts}));
-      }
-    } catch {}
-  });
-  ws.on('close', () => { clients.delete(ws); });
+function pancakeList(){
+  const names = Array.from(S.listeners).map(ws=>ws._alias).filter(Boolean);
+  names.sort();
+  return names;
+}
+function broadcast(obj){
+  const s = JSON.stringify(obj);
+  for(const ws of Array.from(S.listeners)) try{ ws.send(s); }catch(_){}
+}
+function broadcastToAlias(alias,obj){
+  const s = JSON.stringify(obj);
+  for(const ws of Array.from(S.listeners)) if(ws._alias===alias) try{ ws.send(s);}catch(_){}
+}
+
+// ---- WS ----
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer:true });
+
+server.on('upgrade', (req, socket, head)=>{
+  if(!req.url.startsWith('/pong/ws')) { socket.destroy(); return; }
+  wss.handleUpgrade(req, socket, head, (ws)=> wss.emit('connection', ws, req));
 });
 
-/* ===== tick + broadcast (throttled) ===== */
-let lastBroadcast = 0;
-function tick() {
-  if (state.l.up)   state.l.y -= PADDLE_SPEED;
-  if (state.l.down) state.l.y += PADDLE_SPEED;
-  if (state.r.up)   state.r.y -= PADDLE_SPEED;
-  if (state.r.down) state.r.y += PADDLE_SPEED;
-  state.l.y = clamp(state.l.y, 0, HEIGHT-PAD_H);
-  state.r.y = clamp(state.r.y, 0, HEIGHT-PAD_H);
-
-  state.b.x += state.b.vx; state.b.y += state.b.vy;
-
-  if (state.b.y < BALL_R && state.b.vy < 0) state.b.vy *= -1;
-  if (state.b.y > HEIGHT-BALL_R && state.b.vy > 0) state.b.vy *= -1;
-
-  if (state.b.x - BALL_R < 20+PAD_W && state.b.y > state.l.y && state.b.y < state.l.y+PAD_H && state.b.vx < 0) {
-    state.b.vx *= -1; const rel = (state.b.y - (state.l.y+PAD_H/2)) / (PAD_H/2); state.b.vy = (SPEED[currentLevel]||SPEED[0]) * rel;
-  }
-  if (state.b.x + BALL_R > WIDTH-20-PAD_W && state.b.y > state.r.y && state.b.y < state.r.y+PAD_H && state.b.vx > 0) {
-    state.b.vx *= -1; const rel = (state.b.y - (state.r.y+PAD_H/2)) / (PAD_H/2); state.b.vy = (SPEED[currentLevel]||SPEED[0]) * rel;
-  }
-
-  (async () => {
-    if (state.b.x < -BALL_R*2) { state.s.r++; await incScore('r'); resetBall(1); }
-    if (state.b.x > WIDTH+BALL_R*2) { state.s.l++; await incScore('l'); resetBall(-1); }
-    if (currentLevel < 3 && (state.s.l===ADVANCE_AT || state.s.r===ADVANCE_AT)) { await levelUp(); }
-    if (currentLevel===3 && (state.s.l===ADVANCE_AT || state.s.r===ADVANCE_AT)) {
-      if (connected && matches) {
-        const winner = state.s.l===ADVANCE_AT ? 'left' : 'right';
-        await ensureMatch();
-        await matches.updateOne({ _id: currentMatchId }, { $set: { winner, ended_at:new Date() } });
-        await record({ t:'match_end', winner, at:new Date() });
-      }
-      currentMatchId = null; currentLevel=0; state.level=0; state.s.l=0; state.s.r=0; state.e=null; resetBall();
+wss.on('connection', async (ws, req)=>{
+  const u = new URL(req.url, `http://${req.headers.host}`);
+  const alias = aliasSan(u.searchParams.get('alias') || 'test');
+  ws._alias = alias;
+  S.listeners.add(ws);
+  await Players.updateOne({alias}, {$setOnInsert:{alias,kukels:0,createdAt:now()}}, {upsert:true});
+  ws.send(JSON.stringify({type:'pancake', list:pancakeList()}));
+  ws.send(JSON.stringify({type:'state', state:view('joined: '+alias)}));
+  ws.on('message', (buf)=>{
+    let m={}; try{ m=JSON.parse(String(buf)); }catch(_){}
+    if(m.t==='move'){
+      // simple: map first N clients to paddles
+      const idx = Array.from(S.listeners).indexOf(ws) % 2; // 0 or 1
+      const p = S.paddles[idx];
+      p.y = Math.max(1, Math.min( H-1-p.h, p.y + (m.dy||0) ));
     }
-  })();
+  });
+  ws.on('close', ()=>{
+    S.listeners.delete(ws);
+    broadcast({type:'pancake', list:pancakeList()});
+  });
+});
 
-  maybeSpawnEnemy(); enemyStep();
-  if (collideEnemyBall()) { onEnemyHit(); }
-
-  const now = Date.now();
-  if (now - lastBroadcast >= BROADCAST_MS) {
-    lastBroadcast = now;
-    const pack = JSON.stringify({ t:'state', state: {
-      l:{y:state.l.y}, r:{y:state.r.y},
-      b:{x:state.b.x,y:state.b.y,vx:state.b.vx,vy:state.b.vy},
-      e: state.e ? {x:state.e.x,y:state.e.y} : null,
-      s:state.s, level: currentLevel,
-      dim:{w:WIDTH,h:HEIGHT}
-    }});
-    for (const ws of wss.clients) { if (ws.readyState===1) ws.send(pack); }
+// ---- Game loop (very simple physics) ----
+const W=42,H=20;
+function tick(){
+  const L = LEVELS[S.levelIdx];
+  // enemy motion
+  if(S.enemy){
+    S.enemy.x += S.enemy.speed * (S.enemy.dir||1);
+    if(S.enemy.x < 2){ S.enemy.x=2; S.enemy.dir=+1; }
+    if(S.enemy.x > W-3){ S.enemy.x=W-3; S.enemy.dir=-1; }
   }
-}
-setInterval(tick, TICK_MS);
+  // ball move
+  S.ball.x += S.ball.vx;
+  S.ball.y += S.ball.vy;
+  // walls
+  if(S.ball.y<=1 || S.ball.y>=H-2) S.ball.vy *= -1;
+  // paddle collisions
+  for(const p of S.paddles){
+    if(S.ball.x===p.x && S.ball.y>=p.y && S.ball.y<p.y+p.h){
+      S.ball.vx *= -1;
+    }
+  }
+  // enemy collision → counts against players (lose point → level advance trigger)
+  if(S.enemy && Math.round(S.enemy.x)===S.ball.x && Math.round(S.enemy.y)===S.ball.y){
+    S.scores.B++; // penalty to B for demo
+  }
+  // goals
+  if(S.ball.x<=1){ S.scores.B++; S.ball={x:21,y:10,vx:1,vy:1}; }
+  if(S.ball.x>=W-2){ S.scores.A++; S.ball={x:21,y:10,vx:-1,vy:1}; }
 
-const PORT = 3000;
-server.listen(PORT, '127.0.0.1', () => console.log('Pong HTTP/WS on', PORT));
+  // level progress (nextAt)
+  const mx = Math.max(S.scores.A, S.scores.B);
+  if(mx >= (L.nextAt||4)){
+    // reward every connected alias
+    for(const ws of Array.from(S.listeners)) reward(ws._alias, 1);
+    S.scores={A:0,B:0};
+    setLevel(S.levelIdx+1);
+  }
+  broadcast({ type:'state', state:view() });
+}
+setInterval(tick, 1000/15);
+
+// ---- Start ----
+(async ()=>{
+  await client.connect();
+  db = client.db(DBNAME);
+  Players = db.collection('players');
+  Stats   = db.collection('stats');
+  Levels  = db.collection('levels'); // (optional future use)
+  await Players.createIndex({ alias:1 }, { unique:true });
+  await Players.createIndex({ kukels:-1 });
+
+  const srv = server.listen(PORT, ()=>console.log(`Pong HTTP/WS on ${PORT}`));
+  srv.headersTimeout = 65_000;
+})();

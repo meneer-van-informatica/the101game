@@ -1,0 +1,6 @@
+[
+  {"code":"0000","name":"pong","nextAt":4,"sfx":"pong","enemy":false},
+  {"code":"1000","name":"ping","nextAt":4,"sfx":"pingpong","enemy":false},
+  {"code":"2000","name":"ding","nextAt":4,"sfx":"ding","enemy":{"type":"red","y":6,"speed":1.2}},
+  {"code":"5200","name":"dong","nextAt":4,"sfx":"dong","enemy":{"type":"red","y":4,"speed":1.6}}
+]
