@@ -37,7 +37,7 @@ const BASE='/arena';
 const q = s => document.querySelector(s);
 function renderInbox(items){
   q('#inbox').innerHTML =
-    '<b>Inbox</b>' + items.map(t => `<div class="tok"><b>${t.fromAlias}</b> → ${t.toAlias} <small>${new Date(t.ts).toLocaleString()}</small><br>${(t.text||'')}</div>`).join('') || '<i>empty</i>';
+    '<b>Inbox</b>' + (items.map(t => `<div class="tok"><b>${t.fromAlias}</b> → ${t.toAlias} <small>${new Date(t.ts).toLocaleString()}</small><br>${(t.text||'')}</div>`).join('') || '<i>empty</i>');
 }
 async function refreshInbox(){
   const to = q('#to').value.trim(); if(!to) return;
@@ -46,7 +46,7 @@ async function refreshInbox(){
 }
 q('#sendTok').onclick = async ()=>{
   const body = { fromAlias:q('#from').value.trim()||'anon', toAlias:q('#to').value.trim(), text:q('#txt').value.trim() };
-  const r = await fetch(`${BASE}/api/tok`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)}).then(r=>r.json());
+  await fetch(`${BASE}/api/tok`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)});
   await refreshInbox();
 };
 q('#queue').onclick = async ()=>{
@@ -60,7 +60,11 @@ q('#wsBtn').onclick = ()=>{
   if(sock && sock.readyState===1){ sock.close(); }
   sock = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+`${BASE}/ws?alias=${encodeURIComponent(a)}`);
   sock.onmessage = ev => {
-    try{ const m = JSON.parse(ev.data); if(m.type==='tok'){ refreshInbox(); } if(m.type==='match'){ q('#match').textContent = JSON.stringify(m,null,2);} }catch{}
+    try{
+      const m = JSON.parse(ev.data);
+      if(m.type==='tok')  refreshInbox();
+      if(m.type==='match') q('#match').textContent = JSON.stringify(m,null,2);
+    }catch{}
   };
 };
 </script>
