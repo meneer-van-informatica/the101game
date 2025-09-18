@@ -1,0 +1,10 @@
+{
+  "name": "traffic-101",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongodb": "^6.7.0"
+  }
+}
