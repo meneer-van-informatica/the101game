@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="nl"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/css/mvp.css">
+  <title>the101game — admin</title>
+  <style>main{max-width:640px;margin:auto;padding:2rem}</style>
+</head><body><main>
+  <h1>Admin</h1>
+  <p>Gebruik de **STOP**/**START** **KNOP** hieronder.</p>
+  <label>TOKEN <input id="tok" type="password" placeholder="admin token"></label>
+  <p>
+    <button id="stop">STOP (offline)</button>
+    <button id="start">START (online)</button>
+  </p>
+  <pre id="out"></pre>
+<script>
+function call(path){
+  const t = document.getElementById('tok').value.trim();
+  return fetch(path+'?token='+encodeURIComponent(t), {method:'POST'})
+    .then(r=>r.json()).then(j=>{ out.textContent = JSON.stringify(j,null,2); });
+}
+stop.onclick = ()=>call('/admin/stop');
+start.onclick = ()=>call('/admin/start');
+</script>
+</main></body></html>

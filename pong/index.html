@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>the101game — ASCII PONG</title>
+<style>
+  :root { --bg:#000; --fg:#eee; }
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); }
+  body { display:flex; flex-direction:column; }
+  pre#scr {
+    flex:1; margin:0; padding:6px 8px; white-space:pre; user-select:none; -webkit-user-select:none; touch-action:manipulation;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: clamp(12px, 2.2vmin, 20px); line-height: 1.05;
+  }
+  .controls { position: sticky; bottom: 0; display:flex; gap:12px; padding:10px; justify-content:space-around; background:#111; border-top:1px solid #222; }
+  .btn { display:inline-block; text-decoration:none; color:#fff; background:#222; border:1px solid #444; padding:14px 18px; border-radius:10px; font:600 16px system-ui; min-width:42vw; text-align:center; -webkit-tap-highlight-color: transparent; }
+  .btn:active { filter:brightness(1.25); }
+  @media (orientation: landscape) { .btn{ min-width:30vw; } }
+</style>
+<pre id="scr" aria-label="game field" role="img"></pre>
+<div class="controls">
+  <a href="#" id="up" class="btn">↑ omhoog</a>
+  <a href="#" id="down" class="btn">↓ omlaag</a>
+</div>
+<script>
+(() => {
+  const scr = document.getElementById('scr');
+  let ws;
+  let state = { l:{y:0}, r:{y:0}, b:{x:0,y:0}, e:null, s:{l:0,r:0}, level:0, dim:{w:800,h:500} };
+  let gridW=40, gridH=22;
+
+  function recalcGrid(){
+    const vw = Math.max(document.documentElement.clientWidth,  window.innerWidth  || 0);
+    const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+    const cols = Math.max(28, Math.min(64, Math.round(vw / 12)));
+    const rows = Math.max(18, Math.min(36, Math.round(cols / 1.6)));
+    gridW = cols; gridH = rows;
+  }
+  recalcGrid(); addEventListener('resize', recalcGrid);
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function toGX(x){ const W = state.dim?.w || 800; return clamp(Math.round((x/W)*(gridW-2))+1,1,gridW-2); }
+  function toGY(y){ const H = state.dim?.h || 500; return clamp(Math.round((y/H)*(gridH-2))+1,1,gridH-2); }
+
+  function render(){
+    const rows = Array.from({length:gridH}, () => Array(gridW).fill(' '));
+    for (let x=0;x<gridW;x++){ rows[0][x] = rows[gridH-1][x] = '#'; }
+    for (let y=0;y<gridH;y++){ rows[y][0] = rows[y][gridW-1] = '#'; }
+
+    const label = ` ${state.s.l}:${state.s.r}  L${state.level} `;
+    const sx = Math.max(1, Math.floor(gridW/2 - label.length/2));
+    for (let i=0;i<label.length && sx+i<gridW-1;i++) rows[0][sx+i] = label[i];
+
+    const pH = Math.max(3, Math.round(gridH*0.22));
+    const ly = toGY(state.l.y + 45), ry = toGY(state.r.y + 45);
+    const lx = 2, rx = gridW-3;
+    for (let i=-Math.floor(pH/2); i<=Math.floor(pH/2); i++){
+      if (ly+i>0 && ly+i<gridH-1) rows[ly+i][lx] = '|';
+      if (ry+i>0 && ry+i<gridH-1) rows[ry+i][rx] = '|';
+    }
+
+    const bx = toGX(state.b.x), by = toGY(state.b.y);
+    if (by>0 && by<gridH-1 && bx>0 && bx<gridW-1) rows[by][bx] = 'o';
+
+    if (state.e){
+      const ex = toGX(state.e.x), ey = toGY(state.e.y);
+      if (ey>0 && ey<gridH-1 && ex>0 && ex<gridW-1) rows[ey][ex] = 'x';
+    }
+
+    scr.textContent = rows.map(r=>r.join('')).join('\n');
+  }
+
+  function connect(){
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(proto + '://' + location.host + '/pong/ws');
+    ws.onopen = () => { ws.send(JSON.stringify({t:'join'})); };
+    ws.onmessage = ev => { const msg = JSON.parse(ev.data); if (msg.t==='state') { state = msg.state; render(); } };
+  }
+  connect();
+
+  const input = { up:false, down:false };
+  function send(){ if (ws && ws.readyState===1) ws.send(JSON.stringify({t:'input', up:input.up, down:input.down})); }
+
+  const upBtn = document.getElementById('up'), downBtn = document.getElementById('down');
+  function bindHold(el, set){
+    const on = e => { e.preventDefault(); set(true); send(); };
+    const off= e => { e.preventDefault(); set(false); send(); };
+    el.addEventListener('mousedown', on); el.addEventListener('mouseup', off); el.addEventListener('mouseleave', off);
+    el.addEventListener('touchstart', on, {passive:false}); el.addEventListener('touchend', off);
+  }
+  bindHold(upBtn,   v => input.up = v);
+  bindHold(downBtn, v => input.down = v);
+
+  addEventListener('keydown', e => {
+    if (['ArrowUp','w','W'].includes(e.key))   { if(!input.up){ input.up=true; send(); } }
+    if (['ArrowDown','s','S'].includes(e.key)) { if(!input.down){ input.down=true; send(); } }
+  });
+  addEventListener('keyup', e => {
+    if (['ArrowUp','w','W'].includes(e.key))   { input.up=false; send(); }
+    if (['ArrowDown','s','S'].includes(e.key)) { input.down=false; send(); }
+  });
+})();
+</script>

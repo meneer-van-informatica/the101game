@@ -1,0 +1,23 @@
+const http = require("http");
+const { WebSocketServer } = require("ws");
+const attachMusic = require('./music.routes.js');
+attachMusic(app, require('path').join(__dirname,'music.db'));
+
+// --- HTTP fallback for stickers ---
+app.post("/api/sticker", (req,res)=>{
+  try{
+    const m=req.body||{}; m.type="sticker"; broadcast(JSON.stringify(m)); res.json({ok:true});
+  }catch(e){ res.status(500).json({error:String(e)}); }
+});
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+function broadcast(s){ wss.clients.forEach(c=>{ try{ if(c.readyState===1) c.send(s); }catch{} }); }
+wss.on('connection', (ws)=>{
+  ws.on('message', (buf)=>{
+    let m=null; try{ m=JSON.parse(buf.toString()); }catch{}
+    if(!m) return;
+    if(m.type==='hello'){ /* could track roster */ return; }
+    if(m.type==='sticker'){ broadcast(JSON.stringify(m)); }
+  });
+});
+server.listen(PORT, ()=> console.log('stack server on :', PORT));
