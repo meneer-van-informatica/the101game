@@ -1,105 +1,125 @@
+/* the101game — Traffic microservice
+ * Endpoints:
+ *   GET /t/ingest?did=<uuid>&p=<path>&r=<ref>   -> 200, upserts "active session"
+ *   GET /t/kpi?json=1                            -> {"active":{"devices":N,"ttlSec":300},"ok":true}
+ *   GET /t/101.js                                -> client pinger (loads early, very small)
+ *   GET /t/health                                -> {"ok":true}
+ */
+require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const { MongoClient } = require('mongodb');
+const url = require('url');
 
-const PORT = process.env.PORT || 3101;
-const MONGO = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
-const DB    = process.env.MONGODB_DB  || 'the101game';
-const COOKIE_DAYS = 365;
+const PORT = Number(process.env.PORT || 3101);
+const HOST = process.env.HOST || '127.0.0.1';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/the101game';
+const MONGODB_DB  = process.env.MONGODB_DB  || 'the101game';
+const TTL_SESS = Number(process.env.TTL_SESS || 300);     // 5 min "active"
+const TTL_EVT  = Number(process.env.TTL_EVT  || 86400);   // 1 day events
 
 const app = express();
-app.disable('x-powered-by');
-app.use(express.json({ limit: '32kb' }));
-app.use(express.urlencoded({ extended: false }));
+app.set('trust proxy', true);
 
-let col;
-const client = new MongoClient(MONGO);
-client.connect().then(async () => {
-  col = client.db(DB).collection('traffic');
-  await col.createIndex({ ts: -1 });
-  await col.createIndex({ p: 1, ts: -1 });
-  await col.createIndex({ sid: 1, ts: -1 });
-  console.log('[traffic] mongo connected');
-}).catch(e => { console.error('[traffic] mongo error', e); process.exit(1); });
+// Tiny helper
+const now = () => new Date();
+const ok  = (res,obj={}) => res.json({ok:true,...obj});
+const nzc = s => (s||'').slice(0,1024);
 
-function getIP(req){
-  const xf = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim();
-  return xf || req.socket.remoteAddress || '';
-}
+let db=null, colSess=null, colEvt=null;
+(async ()=>{
+  try{
+    const client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 1500 });
+    await client.connect();
+    db = client.db(MONGODB_DB);
+    colSess = db.collection('sessions');
+    colEvt  = db.collection('events');
 
-app.get('/t/health', (req,res)=> res.json({ok:true, ts:Date.now()}));
+    // Indexes (idempotent)
+    await colSess.createIndex({ did:1 }, { unique:true });
+    await colSess.createIndex({ lastSeen:1 }, { expireAfterSeconds: TTL_SESS });
+
+    await colEvt.createIndex({ ts:1 }, { expireAfterSeconds: TTL_EVT });
+    await colEvt.createIndex({ did:1, ts:1 });
+
+    console.log('[traffic] Mongo ready');
+  }catch(e){
+    console.warn('[traffic] Mongo unavailable, running in memory fallback:', e.message);
+  }
+})();
+
+// Fallback memory counts if DB is down
+const mem = { map:new Map(), ttl: TTL_SESS*1000 };
+function memTouch(did){ const t=Date.now(); mem.map.set(did,t); for(const [k,v] of mem.map){ if(t-v>mem.ttl) mem.map.delete(k); } }
+function memCount(){ const t=Date.now(); let n=0; for(const [_,v] of mem.map){ if(t-v<=mem.ttl) n++; } return n; }
+
+// --- Static client: /t/101.js (very small, no CORS fuss) -------------------
+const CLIENT_JS = `
+(()=>{try{
+  const LS=window.localStorage, K='t101.did';
+  let did=LS.getItem(K);
+  if(!did){ did=crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+'-'+Date.now(); LS.setItem(K,did); }
+  const p=encodeURIComponent(location.pathname||'/'), r=encodeURIComponent(document.referrer||'');
+  const u='/t/ingest?did='+encodeURIComponent(did)+'&p='+p+'&r='+r;
+  // send fast; don't block render
+  (navigator.sendBeacon && navigator.sendBeacon(u)) || (new Image()).src=u;
+}catch(_){}})();
+`.trim()+"\n";
 
 app.get('/t/101.js', (req,res)=>{
-  res.type('application/javascript').send(`
-(() => {
-  const setCookie=(n,v,d)=>{const e=new Date(Date.now()+d*864e5).toUTCString();document.cookie=n+"="+v+"; path=/; SameSite=Lax; expires="+e};
-  const getCookie=n=>document.cookie.split('; ').find(r=>r.startsWith(n+'='))?.split('=')[1];
-  let u=getCookie('u'); if(!u){u=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)); setCookie('u',u,365)}
-  let sid=getCookie('sid'); if(!sid){sid=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)); setCookie('sid',sid,1)}
-
-  const body = {
-    t:'pv', u, sid,
-    p:location.pathname+location.search,
-    r:document.referrer||'',
-    ua:navigator.userAgent||'',
-    tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'',
-    ts:Date.now()
-  };
-  const url = '/t/ingest';
-  if(navigator.sendBeacon){
-    const blob = new Blob([JSON.stringify(body)], {type:'application/json'});
-    navigator.sendBeacon(url, blob);
-  } else {
-    fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).catch(()=>{});
-  }
-})();`);
+  res.set('content-type','application/javascript; charset=utf-8');
+  res.set('cache-control','no-store');
+  res.end(CLIENT_JS);
 });
 
-app.get('/t/kpi.js', (req,res)=>{
-  res.type('application/javascript').send(`
-(()=>{const el=document.createElement('div'); el.id='kpi101';
-  Object.assign(el.style,{position:'fixed',top:'10px',right:'10px',zIndex:'99999',
-    background:'rgba(0,0,0,.6)',color:'#fff',padding:'8px 10px',border:'1px solid #555',borderRadius:'10px',
-    font:'12px/1.2 system-ui',backdropFilter:'blur(3px)'}); el.textContent='traffic…';
-  document.body.appendChild(el);
-  async function tick(){try{
-    const r=await fetch('/t/kpi?json=1',{cache:'no-store'}); const j=await r.json();
-    el.textContent=\`now:\${j.now} | 5m:\${j.m5} | 1h:\${j.h1} | active:\${j.active}\`;
-  }catch(e){ /* noop */ } setTimeout(tick, 4000);} tick();})();`);
-});
+// --- Health -----------------------------------------------------------------
+app.get('/t/health', (req,res)=> ok(res,{ts:Date.now(), service:'traffic'}));
 
-app.post('/t/ingest', async (req,res)=>{
-  try{
-    const b = req.body || {};
-    const doc = {
-      ts: b.ts ? new Date(b.ts) : new Date(),
-      t:  b.t || 'pv',
-      u:  (b.u||'').toString().slice(0,64),
-      sid:(b.sid||'').toString().slice(0,64),
-      p:  (b.p||'/').toString().slice(0,512),
-      r:  (b.r||'').toString().slice(0,512),
-      ua: (b.ua||'').toString().slice(0,512),
-      tz: (b.tz||'').toString().slice(0,64),
-      ip: getIP(req)
-    };
-    await col.insertOne(doc);
-    res.json({ok:true});
-  }catch(e){ console.error('[ingest]',e); res.status(500).json({ok:false}); }
-});
-
+// --- KPI JSON ---------------------------------------------------------------
 app.get('/t/kpi', async (req,res)=>{
+  const json = String(req.query.json||'1')==='1';
   try{
-    const now = Date.now();
-    const q = async (ms)=> await col.countDocuments({ t:'pv', ts: { $gt: new Date(now-ms) } });
-    const [nowc,m5,h1] = await Promise.all([ q(60*1000), q(5*60*1000), q(60*60*1000) ]);
-    const active = await col.distinct('sid', { ts:{ $gt: new Date(now-5*60*1000) } }).then(a=>a.length);
-    const top = await col.aggregate([
-      { $match: { t:'pv', ts:{ $gt: new Date(now-15*60*1000) } } },
-      { $group: { _id:'$p', n:{$sum:1} } }, { $sort:{n:-1} }, { $limit:5 }
-    ]).toArray();
-    if (req.query.json) return res.json({ ok:true, now:nowc, m5, h1, active, top });
-    // simple HTML (debug)
-    res.type('html').send('<pre>'+JSON.stringify({now:nowc,m5,h1,active,top},null,2)+'</pre>');
-  }catch(e){ console.error('[kpi]',e); res.status(500).json({ok:false}); }
+    let devices = 0;
+    if(colSess) devices = await colSess.estimatedDocumentCount();
+    else devices = memCount();
+    const payload = { active:{ devices, ttlSec: TTL_SESS } };
+    return json ? ok(res,payload) : res.type('text/plain').end(String(devices));
+  }catch(e){
+    return json ? res.status(200).json({ ok:true, active:{devices:memCount(), ttlSec:TTL_SESS}, degraded:true })
+                : res.type('text/plain').end(String(memCount()));
+  }
 });
 
-app.listen(PORT, ()=> console.log('[traffic] listening on', PORT));
+// --- INGEST -----------------------------------------------------------------
+app.get('/t/ingest', express.urlencoded({extended:false}), async (req,res)=>{
+  const q = req.query || {};
+  const did = nzc(q.did||'').replace(/[^-_.a-zA-Z0-9]/g,'').slice(0,64);
+  if(!did){ res.status(400).end('missing did'); return; }
+
+  const doc = {
+    did,
+    ts: now(),
+    p: nzc(q.p||req.get('referer')||'/'),
+    r: nzc(q.r||''),
+    ip: req.ip || req.headers['x-real-ip'] || req.socket.remoteAddress || '',
+    ua: nzc(req.headers['user-agent']||''),
+  };
+
+  // Touch active session + write one lightweight event
+  try{
+    if(colSess){
+      await colSess.updateOne({did},{ $set:{ did, lastSeen: doc.ts, ua: doc.ua, ip: doc.ip, p: doc.p } }, { upsert:true });
+      await colEvt.insertOne(doc);
+    }else{
+      memTouch(did);
+    }
+  }catch(_){ memTouch(did); } // fallback silently
+
+  // Fast response, cache-less
+  res.set('cache-control','no-store').status(200).type('text/plain').end('ok');
+});
+
+// Root (debug)
+app.get('/t/', (req,res)=> res.type('text/plain').end('t/ok'));
+
+http.createServer(app).listen(PORT, HOST, ()=> console.log(`[traffic] http://${HOST}:${PORT}/t/health`));
