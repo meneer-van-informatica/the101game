@@ -1,0 +1,61 @@
+from flask import Flask, request, jsonify, make_response, Response
+import time, threading, uuid
+
+app = Flask(__name__)
+
+# ====== CONCURRENT COUNT (TTL) ======
+TTL_SECONDS = 35       # hoe lang een sessie "actief" blijft zonder nieuwe pulse
+_sessions = {}         # sid -> last_seen_ts
+_lock = threading.Lock()
+
+def _now(): return time.time()
+
+def _sweep():
+    now = _now()
+    dead = [sid for sid, ts in _sessions.items() if now - ts > TTL_SECONDS]
+    for sid in dead: _sessions.pop(sid, None)
+
+def _active_count():
+    now = _now()
+    return sum(1 for ts in _sessions.values() if now - ts <= TTL_SECONDS)
+
+def _pad5(n: int) -> str:
+    return str(int(n)).zfill(5)
+
+@app.get("/kpi/traffic/read")
+def traffic_read():
+    """Read-only: rapporteert actuele *concurrent* count op basis van pulses."""
+    with _lock:
+        _sweep()
+        cnt = _active_count()
+    if request.args.get("json"):
+        return jsonify({"count": cnt, "ttl": TTL_SECONDS})
+    body = f"the101game — Traffic KPI\nDit is tijdelijk de enige live feature.\nTraffic: {_pad5(cnt)} live\n"
+    return Response(body, mimetype="text/plain")
+
+@app.route("/kpi/pulse", methods=["POST","GET"])
+def pulse():
+    """Heartbeat van frontend. Maakt/renewt cookie 'sid' en telt actieve sessies."""
+    sid = request.cookies.get("sid")
+    created = False
+    if not sid:
+        sid = uuid.uuid4().hex
+        created = True
+    with _lock:
+        _sessions[sid] = _now()
+        _sweep()
+        cnt = _active_count()
+    res = make_response(jsonify({"count": cnt, "sid": sid, "ttl": TTL_SECONDS}))
+    res.headers["Cache-Control"] = "no-store"
+    # veilige, leesbare cookie voor frontend JS (geen HttpOnly, wel SameSite/secure)
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    return res
+
+# (optioneel) Oud increment-endpoint intact laten voor later:
+@app.get("/kpi/traffic")
+def traffic_increment_compat():
+    """Compat: doe niets (of laat bestaan voor legacy)."""
+    with _lock:
+        _sweep()
+        cnt = _active_count()
+    return jsonify({"count": cnt})

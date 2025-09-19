@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+from flask import Flask, Response
+import os, fcntl
+
+BASE = os.path.dirname(__file__)
+DATA_DIR = os.path.join(BASE, "data")
+COUNT_FILE = os.path.join(DATA_DIR, "traffic.count")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+def _read():
+    if not os.path.exists(COUNT_FILE):
+        return 0
+    with open(COUNT_FILE, "r") as f:
+        txt = f.read().strip()
+        return int(txt) if txt else 0
+
+def _inc_and_get():
+    with open(COUNT_FILE, "a+") as f:
+        f.seek(0)
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            raw = f.read().strip()
+            n = int(raw) if raw else 0
+            n += 1
+            f.seek(0); f.truncate(); f.write(str(n))
+            return n
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+app = Flask(__name__)
+
+@app.get("/kpi/traffic")           # increments, returns "Traffic: 00001"
+def traffic_inc():
+    n = _inc_and_get()
+    body = f"the101game — Traffic KPI\nTraffic: {n:05d}\n"
+    return Response(body, mimetype="text/plain")
+
+@app.get("/kpi/traffic/read")      # read-only, returns "Traffic: 00000 retry…" if zero
+def traffic_read():
+    n = _read()
+    suffix = " retry…" if n == 0 else ""
+    body = f"the101game — Traffic KPI\nTraffic: {n:05d}{suffix}\n"
+    return Response(body, mimetype="text/plain")
+
+if __name__ == "__main__":
+    app.run("127.0.0.1", 5001)

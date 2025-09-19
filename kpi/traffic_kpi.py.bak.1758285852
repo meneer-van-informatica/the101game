@@ -1,0 +1,412 @@
+from flask import Flask, request, jsonify, make_response, Response, redirect
+import time, threading, uuid, re, os, hashlib, random, string, math, json, tempfile
+
+app = Flask(__name__)
+
+# ===== CONFIG (aanpasbaar via /kpi/cmd) ============================================
+TTL_SECONDS     = 90
+ROUND_SECONDS   = 60
+TOK_INTERVAL_S  = 10
+TOK_WINDOW_S    = 10
+TOK_JITTER_MAX  = 2
+CODE_RE = re.compile(r"^[A-Z]{4}$")
+MODES = {"stop","live","cars","view","site","null"}
+_mode   = "live"
+_banner = ""
+
+APPDIR  = os.path.dirname(os.path.abspath(__file__))
+WALLET  = os.path.join(APPDIR, "data", "wallet.json")
+ADMINF  = os.path.join(APPDIR, "admin.secret")
+
+# ===== STATE =======================================================================
+_sessions = {}    # sid -> dict
+_lock = threading.RLock()
+_rev = 1
+_round_started = time.time()
+_events = []       # SRT events van huidige ronde
+
+# ETag cache
+_last_screen = ""
+_last_etag   = ""
+_last_sig    = None
+
+# ===== UTIL ========================================================================
+def _now(): return time.time()
+def _mmss(sec): m,s = divmod(max(0,int(sec)),60); return f"{m:02d}:{s:02d}"
+def _admin_token(): return (open(ADMINF).read().strip() if os.path.exists(ADMINF) else os.environ.get("KPI_ADMIN_TOKEN","dev"))
+
+def _json_load(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f: return json.load(f)
+    except Exception: return default
+
+def _json_dump_atomic(path, obj):
+    d = json.dumps(obj, ensure_ascii=False, separators=(",",":"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=os.path.dirname(path))
+    with os.fdopen(fd, "w", encoding="utf-8") as f: f.write(d)
+    os.replace(tmp, path)
+
+def _wallet_get(alias):
+    w = _json_load(WALLET, {})
+    return int(w.get(alias, 0))
+
+def _wallet_add(alias, seconds):
+    if not alias: return
+    w = _json_load(WALLET, {})
+    w[alias] = int(w.get(alias, 0)) + int(max(0, seconds))
+    _json_dump_atomic(WALLET, w)
+
+def _log(evt, code=None, sid=None):
+    _events.append({"ts": _now(), "type": evt, "code": code, "sid": sid})
+
+# ===== TOK life-cycle ===============================================================
+def _get_or_create_session(sid, now=None):
+    now = now or _now()
+    s = _sessions.get(sid)
+    if not s:
+        jitter = random.uniform(-TOK_JITTER_MAX, TOK_JITTER_MAX)
+        s = {"last_seen": now, "joined_at": now, "code": None,
+             "tok_next": now + TOK_INTERVAL_S + jitter, "tok_active": False, "tok_deadline": 0.0}
+        _sessions[sid] = s
+    return s
+
+def _sweep(now=None):
+    now = now or _now()
+    dead = [sid for sid,d in list(_sessions.items()) if now - d.get("last_seen",0) > TTL_SECONDS]
+    for sid in dead:
+        code = _sessions[sid].get("code")
+        if code: _wallet_add(code, now - _sessions[sid].get("joined_at", now))
+        _log("LEAVE", code=code, sid=sid)
+        _sessions.pop(sid, None)
+
+def _active_count(now=None):
+    now = now or _now()
+    return sum(1 for d in _sessions.values() if now - d.get("last_seen",0) <= TTL_SECONDS and d.get("code"))
+
+def _tleft(now=None):
+    now = now or _now()
+    return max(0, ROUND_SECONDS - int(now - _round_started))
+
+def _tok_enforce(s, now):
+    if not s.get("code"):
+        s["tok_active"]=False; s["tok_deadline"]=0.0; s["tok_next"]=now + TOK_INTERVAL_S
+        return (False, 0)
+    if not s["tok_active"] and now >= s["tok_next"]:
+        s["tok_active"]=True; s["tok_deadline"]=now + TOK_WINDOW_S; _log("TOK_START", code=s.get("code"))
+    if s["tok_active"]:
+        left = max(0, math.ceil(s["tok_deadline"] - now))
+        if left <= 0:
+            return ("KILL", 0)
+        return (True, left)
+    return (False, max(0, int(s["tok_next"] - now)))
+
+# ===== JANITOR (reset + sweep + timeouts) ===========================================
+def _round_reset_locked(now):
+    global _round_started, _rev, _events
+    # Ronde afgelopen → alles uitboeken naar wallet
+    for s in list(_sessions.values()):
+        if s.get("code"): _wallet_add(s["code"], now - s.get("joined_at", now))
+    _sessions.clear()
+    _round_started = now
+    _rev += 1
+    _events = []
+    _log("ROUND_START")
+
+def _janitor():
+    while True:
+        time.sleep(1)
+        now = _now()
+        with _lock:
+            if _mode != "stop" and now - _round_started >= ROUND_SECONDS:
+                _round_reset_locked(now)
+            else:
+                killers=[]
+                for sid, s in list(_sessions.items()):
+                    state,_ = _tok_enforce(s, now)
+                    if state == "KILL":
+                        code = s.get("code")
+                        if code: _wallet_add(code, now - s.get("joined_at", now))
+                        _log("LEAVE", code=code, sid=sid)
+                        killers.append(sid)
+                for sid in killers: _sessions.pop(sid, None)
+                _sweep(now)
+threading.Thread(target=_janitor, daemon=True).start()
+with _lock: _log("ROUND_START")
+
+# ===== ROUTES: minimal redirects / health ===========================================
+@app.get("/")
+def _root_redirect():
+    # “Alle tekst weg” ⇒ root hard naar 1-blok viewer
+    return redirect("/kpi/screen", code=302)
+
+@app.get("/kpi/healthz")
+def _healthz(): return ("ok\n", 200, {"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"})
+
+# ===== API: pulse / tok / join-login / leave-logout / exit ==========================
+@app.route("/kpi/pulse", methods=["POST","GET"])
+def pulse():
+    sid = request.cookies.get("sid") or uuid.uuid4().hex
+    now = _now()
+    with _lock:
+        s = _get_or_create_session(sid, now); s["last_seen"]=now
+        state, left = _tok_enforce(s, now)
+        if state == "KILL":
+            if s.get("code"): _wallet_add(s["code"], now - s.get("joined_at", now))
+            _sessions.pop(sid, None)
+            res = make_response(jsonify({"kicked": True, "count": _active_count(now)}))
+            res.set_cookie("sid","",max_age=0); res.headers["Cache-Control"]="no-store"; return res
+        res = make_response(jsonify({
+            "sid": sid, "count": _active_count(now), "ttl": TTL_SECONDS, "rev": _rev, "tleft": _tleft(now),
+            "tok": {"active": (state is True), "left": int(left)}
+        }))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"]="no-store"
+    return res
+
+@app.post("/kpi/tok")
+def tok_ack():
+    sid = request.cookies.get("sid")
+    if not sid: return jsonify({"ok": False, "error":"NO_SID"}), 400
+    now = _now()
+    with _lock:
+        s = _sessions.get(sid)
+        if not s: return jsonify({"ok": False, "error":"NO_SESSION"}), 404
+        s["last_seen"]=now
+        if s.get("tok_active"):
+            s["tok_active"]=False; s["tok_deadline"]=0.0
+            jitter = random.uniform(-TOK_JITTER_MAX, TOK_JITTER_MAX)
+            s["tok_next"]=now + TOK_INTERVAL_S + jitter
+            _log("TOK_ACK", code=s.get("code"), sid=sid)
+        else:
+            s["tok_next"]=max(s.get("tok_next", now+TOK_INTERVAL_S), now+2)
+        st, left = _tok_enforce(s, now)
+        return jsonify({"ok": True, "tok": {"active": st is True, "left": int(left)}})
+
+def _suggest_alt(code):
+    letters = string.ascii_uppercase
+    for _ in range(60):
+        i=random.randrange(4); alt=list(code); alt[i]=random.choice(letters.replace(alt[i],"")); alt="".join(alt)
+        if not any(d.get("code")==alt for d in _sessions.values()): return alt
+    return None
+
+@app.post("/kpi/join")
+@app.post("/kpi/login")
+def join():
+    code = (request.form.get("code") if request.form else None) or (request.json or {}).get("code")
+    if not code or not CODE_RE.match(code): return jsonify({"ok": False, "error":"CODE_INVALID"}), 400
+    code = code.upper(); now=_now()
+    with _lock:
+        if any(d.get("code")==code for d in _sessions.values()):
+            return jsonify({"ok": False, "error":"CODE_TAKEN", "alt": _suggest_alt(code)}), 409
+        sid = request.cookies.get("sid") or uuid.uuid4().hex
+        s = _get_or_create_session(sid, now)
+        s.update(code=code, joined_at=now, last_seen=now, tok_active=False, tok_deadline=0.0)
+        jitter = random.uniform(-TOK_JITTER_MAX, TOK_JITTER_MAX)
+        s["tok_next"]=now + TOK_INTERVAL_S + jitter
+        _log("JOIN", code=code, sid=sid)
+        res = make_response(jsonify({"ok": True, "sid": sid, "code": code, "count": _active_count(now), "rev": _rev, "tleft": _tleft(now)}))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"]="no-store"
+    return res
+
+@app.post("/kpi/leave")
+@app.post("/kpi/logout")
+def leave():
+    sid = request.cookies.get("sid")
+    now = _now()
+    with _lock:
+        if sid and sid in _sessions:
+            s = _sessions.pop(sid)
+            if s.get("code"): _wallet_add(s["code"], now - s.get("joined_at", now))
+            _log("LEAVE", code=s.get("code"), sid=sid)
+    return jsonify({"ok": True})
+
+@app.post("/kpi/exit")
+def exit_now():
+    # actieve sessie (indien aanwezig) netjes afboeken + cookie reset
+    sid = request.cookies.get("sid")
+    now = _now()
+    with _lock:
+        if sid and sid in _sessions:
+            s = _sessions.pop(sid)
+            if s.get("code"): _wallet_add(s["code"], now - s.get("joined_at", now))
+            _log("LEAVE", code=s.get("code"), sid=sid)
+    res = make_response(jsonify({"ok": True, "exit": True}))
+    res.set_cookie("sid","",max_age=0)
+    return res
+
+# ===== BOARD / ROUND / WALLET ========================================================
+@app.get("/kpi/board")
+def board():
+    now=_now()
+    with _lock:
+        items=[]
+        for sid, d in _sessions.items():
+            if now - d.get("last_seen",0) > TTL_SECONDS: continue
+            code=d.get("code"); 
+            if not code: continue
+            age=int(now - d.get("joined_at", now))
+            st, left = _tok_enforce(d, now)
+            tok = int(left) if st is True else None
+            items.append({"code":code, "age_s":age, "tok":tok, "kukel": _wallet_get(code)})
+        items.sort(key=lambda x:(-x["age_s"], x["code"]))
+        return jsonify({"board": items, "count": len(items), "rev": _rev, "tleft": _tleft(now)})
+
+@app.get("/kpi/wallet")
+def wallet_get():
+    alias = (request.args.get("alias") or "").upper()
+    if not CODE_RE.match(alias): return jsonify({"ok": False, "error":"ALIAS_INVALID"}), 400
+    return jsonify({"ok": True, "alias": alias, "kukel": _wallet_get(alias)})
+
+@app.get("/kpi/round")
+def round_info():
+    with _lock:
+        return jsonify({"tleft": _tleft(), "rev": _rev, "round": ROUND_SECONDS, "mode": _mode, "banner": _banner,
+                        "ttl": TTL_SECONDS, "tok_interval": TOK_INTERVAL_S, "tok_window": TOK_WINDOW_S})
+
+# ===== ADMIN ========================================================================
+@app.post("/kpi/cmd")
+def cmd():
+    token = request.args.get("token") or (request.json or {}).get("token")
+    if token != _admin_token(): return jsonify({"ok": False, "error":"UNAUTHORIZED"}), 401
+    key     = (request.args.get("key") or (request.json or {}).get("key","")).lower().strip()
+    msg     = request.args.get("msg") or (request.json or {}).get("msg")
+    round_s = request.args.get("round") or (request.json or {}).get("round")
+    ttl     = request.args.get("ttl") or (request.json or {}).get("ttl")
+    ti      = request.args.get("tok_interval") or (request.json or {}).get("tok_interval")
+    tw      = request.args.get("tok_window") or (request.json or {}).get("tok_window")
+    reset   = (request.args.get("reset") or (request.json or {}).get("reset")) in ("1","true","True")
+    out={}
+    with _lock:
+        global _mode, _banner, ROUND_SECONDS, TTL_SECONDS, TOK_INTERVAL_S, TOK_WINDOW_S
+        if key:
+            if key not in MODES: return jsonify({"ok": False, "error":"INVALID_MODE", "modes": sorted(MODES)}), 400
+            _mode = key; out["mode"]=_mode
+        if msg is not None: _banner = (msg or "").upper()[:80]; out["banner"]=_banner
+        if round_s:
+            try: rs=int(round_s); 
+            except: rs=None
+            if rs and 10<=rs<=3600: ROUND_SECONDS=rs; out["round"]=ROUND_SECONDS
+        if ttl:
+            try: TTL_SECONDS=max(10,int(ttl)); out["ttl"]=TTL_SECONDS
+            except: out["warn_ttl"]="invalid"
+        if ti:
+            try: TOK_INTERVAL_S=max(5,int(ti)); out["tok_interval"]=TOK_INTERVAL_S
+            except: out["warn_tok_interval"]="invalid"
+        if tw:
+            try: TOK_WINDOW_S=max(3,int(tw)); out["tok_window"]=TOK_WINDOW_S
+            except: out["warn_tok_window"]="invalid"
+        if reset:
+            _round_reset_locked(_now()); out["reset"]="ok"
+    out["ok"]=True
+    return jsonify(out)
+
+# ===== ASCII 160×144 (één blok) + ETag ==============================================
+def _pad(line,w): return (line[:w] if len(line)>w else line + " "*(w-len(line)))
+
+def _render_screen(cols=160, rows=144):
+    now=_now()
+    with _lock:
+        cnt=_active_count(now); tleft=_tleft(now); mode=_mode; banner=_banner
+        items=[]; tok_sig=[]
+        for sid,d in _sessions.items():
+            if now - d.get("last_seen",0) > TTL_SECONDS: continue
+            code=d.get("code"); 
+            if not code: continue
+            age=int(now - d.get("joined_at", now))
+            st, left = _tok_enforce(d, now)
+            tok = int(left) if st is True else None
+            kukel=_wallet_get(code)
+            items.append((code,age,tok,kukel))
+            tok_sig.append(f"{code}:{tok if tok is not None else 'ok'}")
+        items.sort(key=lambda x:(-x[1], x[0]))
+
+    cols = max(60, cols); rows = max(20, rows)
+    horiz="-"*(cols-2)
+    lines=["+"+horiz+"+"] + ["|"+" "*(cols-2)+"|" for _ in range(rows-2)] + ["+"+horiz+"+"]
+
+    def put(x,y,s):
+        if not (0<x<cols-1 and 0<y<rows-1): return
+        s=str(s); 
+        if x+len(s)>=cols-1: s=s[:cols-1-x]
+        row=lines[y]; lines[y]=row[:x]+s+row[x+len(s):]
+
+    put(2,2, f"ROUND T-{_mmss(tleft)}   MODE: {mode.upper()}")  # geen overige tekst
+    if banner: put(cols-2-len(banner), 2, banner)
+    put(2,3, "ALIAS   TIME   TOK   KUKEL")
+
+    start_y=5; avail=(rows-1)-start_y
+    def rowline(i,code,age,tok,kukel):
+        tok_str=("OK " if tok is None else f"{tok:02d}s")
+        return f"{i:2d}. {code}   {_mmss(age)}   {tok_str}   {kukel:6d}"
+
+    if len(items)<=avail:
+        y=start_y
+        for i,(c,a,t,k) in enumerate(items[:avail],start=1):
+            put(2,y,rowline(i,c,a,t,k)); y+=1
+    else:
+        left=items[:avail]; right=items[avail:avail*2]
+        y=start_y
+        for i,(c,a,t,k) in enumerate(left,start=1):
+            put(2,y,rowline(i,c,a,t,k)); y+=1
+        y=start_y
+        for i,(c,a,t,k) in enumerate(right,start=1+len(left)):
+            put(cols//2+1,y,rowline(i,c,a,t,k)); y+=1
+
+    lines=[_pad(l,cols) for l in lines]
+    body="\n".join(lines)+"\n"
+    digest=hashlib.sha1((";".join(f"{c}:{a}:{t if t is not None else 'ok'}:{k}" for c,a,t,k in items)).encode()).hexdigest()
+    sig=(cnt,digest,mode,banner,tleft)
+    return body,sig
+
+_last_screen=""; _last_etag=""; _last_sig=None
+def _get_screen_cached():
+    global _last_screen,_last_etag,_last_sig
+    body,sig=_render_screen()
+    if sig!=_last_sig:
+        _last_sig=sig
+        _last_screen=body
+        _last_etag=hashlib.md5(body.encode()).hexdigest()
+    return _last_screen,_last_etag
+
+@app.get("/kpi/screen.txt")
+def screen_txt():
+    body,etag=_get_screen_cached()
+    inm=request.headers.get("If-None-Match")
+    if inm and inm==etag:
+        r=Response(status=304); r.headers["ETag"]=etag; r.headers["Cache-Control"]="no-store"; return r
+    r=Response(body, mimetype="text/plain; charset=utf-8")
+    r.headers["Cache-Control"]="no-store"; r.headers["ETag"]=etag
+    return r
+
+# ===== Viewer: één <pre>, geen text/title/overlays ==================================
+@app.get("/kpi/screen")
+def screen_html():
+    html = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;background:#000;color:#0f0}pre#scr{margin:0;white-space:pre;line-height:1;letter-spacing:0;font:12px ui-monospace,monospace;padding:6px}</style>
+<pre id="scr"></pre>
+<script>
+  const scr=document.getElementById('scr'); let etag=null, tok=false, idle=0;
+  (async function aliasFromHash(){
+    try{ const m=(location.hash||'').match(/[#&]a=([A-Za-z]{4})/); if(!m) return;
+      const code=m[1].toUpperCase(); if(!/^[A-Z]{4}$/.test(code)) return;
+      const r=await fetch('/kpi/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)});
+      if(r.status===409){ const j=await r.json(); if(j.alt){ await fetch('/kpi/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(j.alt)}); } }
+    }catch(_){}
+  })();
+  async function pull(){ try{
+    const r=await fetch('/kpi/screen.txt',{cache:'no-store', headers: etag?{'If-None-Match':etag}:{}}); 
+    if(r.status!==304){ etag=r.headers.get('ETag'); scr.textContent=await r.text(); idle=0; } else { idle++; }
+  }catch(_){} }
+  async function pulse(){ try{ const r=await fetch('/kpi/pulse',{method:'POST'}); if(!r.ok) return; const j=await r.json(); tok=!!(j&&j.tok&&j.tok.active);}catch(_){} }
+  async function tokAck(){ try{ await fetch('/kpi/tok',{method:'POST'}); }catch(_){} }
+  async function doExit(){ try{ await fetch('/kpi/exit',{method:'POST'}); location.replace('/kpi/screen'); }catch(_){} }
+  addEventListener('keydown', e=>{ if(tok) tokAck(); if(e.key==='q' || e.key==='x') doExit(); if(e.key==='l') fetch('/kpi/logout',{method:'POST'}); });
+  addEventListener('mousedown', ()=>{ if(tok) tokAck(); });
+  addEventListener('touchstart', ()=>{ if(tok) tokAck(); }, {passive:true});
+  async function loop(){ await Promise.all([pull(),pulse()]); setTimeout(loop, tok?500:(idle>5?3000:1000)); } loop();
+  addEventListener('pagehide', ()=>{ try{ navigator.sendBeacon('/kpi/logout','1'); }catch(_){} });
+  addEventListener('beforeunload', ()=>{ try{ navigator.sendBeacon('/kpi/logout','1'); }catch(_){} });
+</script>"""
+    return Response(html, mimetype="text/html; charset=utf-8")

@@ -1,0 +1,235 @@
+from flask import Flask, request, jsonify, make_response, Response
+import time, threading, uuid, re, os
+from datetime import datetime, timezone
+
+app = Flask(__name__)
+
+# ===== CONFIG =====================================================================
+TTL_SECONDS   = 90      # failsafe presence
+ROUND_SECONDS = 60      # reset iedereen elke 60s
+CODE_RE = re.compile(r"^[A-Z]{4}$")
+MODES = {"stop","live","cars","view","site","null"}  # FIX-lijst
+_mode = "live"
+
+_sessions = {}   # sid -> {"last_seen": float, "joined_at": float, "code": str|None}
+_lock = threading.Lock()
+_rev = 1
+_round_started = time.time()
+
+def _now(): return time.time()
+def _iso(ts): return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(timespec="seconds")
+def _tleft(now=None):
+    now = now or _now()
+    return max(0, ROUND_SECONDS - int(now - _round_started))
+
+def _sweep(now=None):
+    now = now or _now()
+    dead = [sid for sid,d in list(_sessions.items()) if now - d.get("last_seen", 0) > TTL_SECONDS]
+    for sid in dead: _sessions.pop(sid, None)
+
+def _active_count(now=None):
+    now = now or _now()
+    return sum(1 for d in _sessions.values() if now - d.get("last_seen", 0) <= TTL_SECONDS)
+
+def _get_or_create_session(sid, now=None):
+    now = now or _now()
+    s = _sessions.get(sid)
+    if not s:
+        s = {"last_seen": now, "joined_at": now, "code": None}
+        _sessions[sid] = s
+    return s
+
+def _mmss(sec):
+    m, s = divmod(max(0,int(sec)), 60)
+    return f"{m:02d}:{s:02d}"
+
+# admin token
+def _admin_token():
+    p = "/home/lucas/the101game/kpi/admin.secret"
+    if os.path.exists(p):
+        return open(p).read().strip()
+    return os.environ.get("KPI_ADMIN_TOKEN","dev")
+
+# janitor: ronde-reset per 60s
+def _janitor():
+    global _round_started, _rev
+    while True:
+        time.sleep(1)
+        now = _now()
+        with _lock:
+            if now - _round_started >= ROUND_SECONDS:
+                _sessions.clear()
+                _round_started = now
+                _rev += 1
+            else:
+                _sweep(now)
+threading.Thread(target=_janitor, daemon=True).start()
+
+# ===== API minimal ================================================================
+@app.route("/kpi/pulse", methods=["POST","GET"])
+def pulse():
+    sid = request.cookies.get("sid") or uuid.uuid4().hex
+    now = _now()
+    with _lock:
+        s = _get_or_create_session(sid, now)
+        s["last_seen"] = now
+        cnt = _active_count(now)
+        rev = _rev
+        tleft = _tleft(now)
+    res = make_response(jsonify({"count": cnt, "sid": sid, "ttl": TTL_SECONDS, "rev": rev, "tleft": tleft}))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+@app.post("/kpi/join")
+def join():
+    code = (request.form.get("code") if request.form else None) or (request.json or {}).get("code", None)
+    if not code or not CODE_RE.match(code):
+        return jsonify({"ok": False, "error": "CODE_INVALID", "hint": "4 hoofdletters [A-Z]."}), 400
+    sid = request.cookies.get("sid") or uuid.uuid4().hex
+    now = _now()
+    with _lock:
+        s = _get_or_create_session(sid, now)
+        s.update(code=code, joined_at=now, last_seen=now)
+        cnt = _active_count(now)
+        rev = _rev
+        tleft = _tleft(now)
+    res = make_response(jsonify({"ok": True, "sid": sid, "code": code, "count": cnt, "rev": rev, "tleft": tleft}))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+@app.post("/kpi/leave")
+def leave():
+    sid = request.cookies.get("sid")
+    with _lock:
+        if sid: _sessions.pop(sid, None)
+    return jsonify({"ok": True})
+
+@app.get("/kpi/board")
+def board():
+    now = _now()
+    with _lock:
+        items = []
+        for sid, d in _sessions.items():
+            if now - d.get("last_seen", 0) > TTL_SECONDS: continue
+            code = d.get("code")
+            if not code: continue
+            age = int(now - d.get("joined_at", now))
+            items.append({"code": code, "age_s": age})
+        items.sort(key=lambda x: (-x["age_s"], x["code"]))
+        rev = _rev
+        tleft = _tleft(now)
+    return jsonify({"board": items, "count": len(items), "rev": rev, "tleft": tleft})
+
+@app.get("/kpi/round")
+def round_info():
+    with _lock:
+        return jsonify({"tleft": _tleft(), "rev": _rev, "round": ROUND_SECONDS})
+
+# ===== MODE control (admin) ======================================================
+@app.post("/kpi/cmd")
+def cmd():
+    token = request.args.get("token") or (request.json or {}).get("token")
+    key   = (request.args.get("key") or (request.json or {}).get("key","")).lower()
+    if token != _admin_token():
+        return jsonify({"ok": False, "error": "UNAUTHORIZED"}), 401
+    if key not in MODES:
+        return jsonify({"ok": False, "error": "INVALID_MODE", "modes": sorted(MODES)}), 400
+    global _mode
+    with _lock:
+        _mode = key
+        rv = _mode
+    return jsonify({"ok": True, "mode": rv})
+
+# ===== ASCII screen ==============================================================
+def _ascii_screen(cols=160, rows=144):
+    now = _now()
+    with _lock:
+        cnt   = _active_count(now)
+        tleft = _tleft(now)
+        mode  = _mode
+        # board
+        entries = []
+        for sid, d in _sessions.items():
+            if now - d.get("last_seen", 0) > TTL_SECONDS: continue
+            if not d.get("code"): continue
+            entries.append((d["code"], int(now - d.get("joined_at", now))))
+        entries.sort(key=lambda x: (-x[1], x[0]))
+
+    if cols < 2 or rows < 2:
+        return "invalid size\n"
+
+    lines = [""] * rows
+    horiz = "-" * (cols - 2)
+    lines[0] = "+" + horiz + "+"
+    lines[rows-1] = "+" + horiz + "+"
+    middle = " " * (cols - 2)
+    for r in range(1, rows-1):
+        lines[r] = "|" + middle + "|"
+
+    def put(x, y, s):
+        if not (0 < x < cols-1 and 0 < y < rows-1): return
+        s = str(s)[:max(0, cols-1-x)]
+        row = lines[y]
+        lines[y] = row[:x] + s + row[x+len(s):]
+
+    # Kopregel = exact 1 lijn, alles ASCII. MODE zichtbaar.
+    put(2, 2, f"TRAFFIC: {cnt:05d}   ROUND T-{_mmss(tleft)}   MODE: {mode.upper()}")
+    put(2, 3, "ALIAS   TIME")
+
+    y = 5
+    for i, (code, age) in enumerate(entries):
+        if y >= rows-1: break
+        put(2, y, f"{i+1:2d}. {code}   {_mmss(age)}")
+        y += 1
+
+    return "\n".join(lines) + "\n"
+
+@app.get("/kpi/screen.txt")
+def screen_txt():
+    body = _ascii_screen()
+    r = Response(body, mimetype="text/plain; charset=utf-8")
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
+@app.get("/kpi/screen")
+def screen_html():
+    # Eén zichtbaar element: <pre id="scr">. Geen z-index, geen overlay, geen extra UI.
+    html = """<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the101game — ASCII</title>
+<style>
+  html,body{margin:0;background:#000;color:#0f0}
+  pre#scr{margin:0;white-space:pre;line-height:1;letter-spacing:0;font:12px ui-monospace,monospace;padding:6px}
+</style>
+<pre id="scr"></pre>
+<script>
+  const scr = document.getElementById('scr');
+
+  // Alias via URL hash:  #a=ABCD  (wordt 1x gepost; verder alleen het ASCII-blok)
+  (async function aliasFromHash(){
+    try{
+      const m = (location.hash||'').match(/[#&]a=([A-Za-z]{4})/);
+      if(!m) return;
+      const code = m[1].toUpperCase();
+      if(!/^[A-Z]{4}$/.test(code)) return;
+      await fetch('/kpi/join', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'code='+encodeURIComponent(code)});
+    }catch(_){}
+  })();
+
+  async function tick(){
+    try{
+      const t = await fetch('/kpi/screen.txt', {cache:'no-store'}).then(r=>r.text());
+      scr.textContent = t; // één blok, niks eroverheen.
+    }catch(_){}
+  }
+
+  tick(); setInterval(tick, 1000);
+
+  // Leave-beacon (niet zichtbaar)
+  window.addEventListener('pagehide', ()=>{ try{ navigator.sendBeacon('/kpi/leave','1'); }catch(_){} });
+  window.addEventListener('beforeunload', ()=>{ try{ navigator.sendBeacon('/kpi/leave','1'); }catch(_){} });
+</script>
+"""
+    return Response(html, mimetype="text/html; charset=utf-8")

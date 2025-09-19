@@ -1,0 +1,323 @@
+from flask import Flask, request, jsonify, make_response, Response
+import time, threading, uuid, re, os, hashlib, random, string
+from datetime import datetime, timezone
+
+app = Flask(__name__)
+
+# ===== CONFIG =====================================================================
+TTL_SECONDS   = 90                 # failsafe presence (>= round)
+ROUND_SECONDS = 60                 # reset iedereen elke 60s
+CODE_RE = re.compile(r"^[A-Z]{4}$")
+MODES = {"stop","live","cars","view","site","null"}  # FIX-lijst
+_mode = "live"
+_banner = ""                       # optionele kopregel-boodschap
+
+# State
+_sessions = {}   # sid -> {"last_seen": float, "joined_at": float, "code": str|None}
+_lock = threading.Lock()
+_rev = 1
+_round_started = time.time()
+
+# Cached screen (ETag/304)
+_last_screen = ""
+_last_etag   = ""
+_last_sig    = None   # (count, board_digest, mode, banner, tleftBucket)
+
+def _now(): return time.time()
+def _iso(ts): return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(timespec="seconds")
+def _mmss(sec):
+    m, s = divmod(max(0,int(sec)), 60)
+    return f"{m:02d}:{s:02d}"
+
+def _tleft(now=None):
+    now = now or _now()
+    return max(0, ROUND_SECONDS - int(now - _round_started))
+
+def _sweep(now=None):
+    now = now or _now()
+    dead = [sid for sid,d in list(_sessions.items()) if now - d.get("last_seen", 0) > TTL_SECONDS]
+    for sid in dead: _sessions.pop(sid, None)
+
+def _active_count(now=None):
+    now = now or _now()
+    return sum(1 for d in _sessions.values() if now - d.get("last_seen", 0) <= TTL_SECONDS)
+
+def _get_or_create_session(sid, now=None):
+    now = now or _now()
+    s = _sessions.get(sid)
+    if not s:
+        s = {"last_seen": now, "joined_at": now, "code": None}
+        _sessions[sid] = s
+    return s
+
+def _admin_token():
+    p = "/home/lucas/the101game/kpi/admin.secret"
+    if os.path.exists(p):
+        return open(p).read().strip()
+    return os.environ.get("KPI_ADMIN_TOKEN","dev")
+
+# ===== JANITOR (per seconde) ======================================================
+def _janitor():
+    global _round_started, _rev
+    while True:
+        time.sleep(1)
+        now = _now()
+        with _lock:
+            if _mode != "stop" and now - _round_started >= ROUND_SECONDS:
+                _sessions.clear()
+                _round_started = now
+                _rev += 1
+            else:
+                _sweep(now)
+threading.Thread(target=_janitor, daemon=True).start()
+
+# ===== SHARED: board snapshot ======================================================
+def _board_snapshot():
+    now = _now()
+    with _lock:
+        cnt = _active_count(now)
+        tleft = _tleft(now)
+        mode = _mode
+        banner = _banner
+        items = []
+        for sid, d in _sessions.items():
+            if now - d.get("last_seen", 0) > TTL_SECONDS: continue
+            code = d.get("code")
+            if not code: continue
+            age = int(now - d.get("joined_at", now))
+            items.append((code, age))
+        items.sort(key=lambda x: (-x[1], x[0]))
+        return cnt, tleft, mode, banner, items
+
+# ===== API MINIMAL =================================================================
+@app.route("/kpi/pulse", methods=["POST","GET"])
+def pulse():
+    sid = request.cookies.get("sid") or uuid.uuid4().hex
+    now = _now()
+    with _lock:
+        s = _get_or_create_session(sid, now)
+        s["last_seen"] = now
+        cnt = _active_count(now)
+        rev = _rev
+        tleft = _tleft(now)
+    res = make_response(jsonify({"count": cnt, "sid": sid, "ttl": TTL_SECONDS, "rev": rev, "tleft": tleft}))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+def _suggest_alt(code):
+    # Probeer 3 varianten door één letter te vervangen
+    letters = string.ascii_uppercase
+    for _ in range(50):
+        i = random.randrange(4)
+        alt = list(code)
+        alt[i] = random.choice(letters.replace(alt[i], ""))
+        alt = "".join(alt)
+        # unique check
+        if not any((d.get("code")==alt) for d in _sessions.values()):
+            return alt
+    return None
+
+@app.post("/kpi/join")
+def join():
+    code = (request.form.get("code") if request.form else None) or (request.json or {}).get("code", None)
+    if not code or not CODE_RE.match(code):
+        return jsonify({"ok": False, "error": "CODE_INVALID", "hint": "4 hoofdletters [A-Z]."}), 400
+    code = code.upper()
+    now = _now()
+    with _lock:
+        # uniqueness per round
+        if any((d.get("code")==code) for d in _sessions.values()):
+            alt = _suggest_alt(code)
+            return jsonify({"ok": False, "error": "CODE_TAKEN", "alt": alt}), 409
+        sid = request.cookies.get("sid") or uuid.uuid4().hex
+        s = _get_or_create_session(sid, now)
+        s.update(code=code, joined_at=now, last_seen=now)
+        cnt = _active_count(now)
+        rev = _rev
+        tleft = _tleft(now)
+    res = make_response(jsonify({"ok": True, "sid": sid, "code": code, "count": cnt, "rev": rev, "tleft": tleft}))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+@app.post("/kpi/leave")
+def leave():
+    sid = request.cookies.get("sid")
+    with _lock:
+        if sid: _sessions.pop(sid, None)
+    return jsonify({"ok": True})
+
+@app.get("/kpi/board")
+def board():
+    cnt, tleft, mode, banner, items = _board_snapshot()
+    with _lock:
+        rev = _rev
+    return jsonify({"board": [{"code":c,"age_s":a} for c,a in items], "count": len(items), "rev": rev, "tleft": tleft})
+
+@app.get("/kpi/round")
+def round_info():
+    with _lock:
+        return jsonify({"tleft": _tleft(), "rev": _rev, "round": ROUND_SECONDS, "mode": _mode, "banner": _banner})
+
+# ===== ADMIN: /kpi/cmd  (mode, banner msg, round seconds) ============================
+@app.post("/kpi/cmd")
+def cmd():
+    token = request.args.get("token") or (request.json or {}).get("token")
+    if token != _admin_token():
+        return jsonify({"ok": False, "error": "UNAUTHORIZED"}), 401
+    key = (request.args.get("key") or (request.json or {}).get("key","")).lower().strip()
+    msg = request.args.get("msg") or (request.json or {}).get("msg", None)
+    new_round = request.args.get("round") or (request.json or {}).get("round", None)
+
+    out = {}
+    with _lock:
+        global _mode, ROUND_SECONDS, _round_started, _rev, _banner
+        if key:
+            if key not in MODES:
+                return jsonify({"ok": False, "error": "INVALID_MODE", "modes": sorted(MODES)}), 400
+            _mode = key
+            out["mode"] = _mode
+        if msg is not None:
+            _banner = (msg or "").upper()[:80]
+            out["banner"] = _banner
+        if new_round:
+            try:
+                nr = int(new_round)
+                if 10 <= nr <= 3600:
+                    ROUND_SECONDS = nr
+                    _round_started = _now()
+                    _rev += 1
+                    out["round"] = ROUND_SECONDS
+                else:
+                    out["warn"] = "round outside [10..3600], ignored"
+            except:
+                out["warn"] = "round invalid"
+    out["ok"] = True
+    return jsonify(out)
+
+# ===== ASCII SCREEN + ETag ============================================================
+def _pad_to(line: str, width: int) -> str:
+    if len(line) > width: return line[:width]
+    return line + (" " * (width - len(line)))
+
+def _render_screen(cols=160, rows=144):
+    cnt, tleft, mode, banner, items = _board_snapshot()
+
+    # frame lines
+    horiz = "-" * (cols - 2)
+    lines = []
+    lines.append("+" + horiz + "+")
+    inner = " " * (cols - 2)
+    for _ in range(rows-2):
+        lines.append("|" + inner + "|")
+    lines.append("+" + horiz + "+")
+
+    def put(x, y, s):
+        if not (0 < x < cols-1 and 0 < y < rows-1): return
+        s = str(s)
+        if x + len(s) >= cols-1: s = s[:cols-1-x]
+        row = lines[y]
+        lines[y] = row[:x] + s + row[x+len(s):]
+
+    # header
+    hdr = f"TRAFFIC: {cnt:05d}   ROUND T-{_mmss(tleft)}   MODE: {mode.upper()}"
+    put(2, 2, hdr)
+    if banner:
+        put(cols - 2 - len(banner), 2, banner)  # rechts uitlijnen
+    put(2, 3, "ALIAS   TIME")
+
+    # board → 1 of 2 kolommen
+    start_y = 5
+    avail = (rows - 1) - start_y
+    per_col = avail
+    two_cols = False
+    if len(items) > avail:
+        two_cols = True
+        per_col = avail
+        # we tekenen per seconde, het is OK om hard te cappen op 2 kolommen (2*avail)
+    def draw_col(x, subset):
+        y = start_y
+        for i, (code, age) in enumerate(subset):
+            if y >= rows-1: break
+            put(x, y, f"{i+1:2d}. {code}   {_mmss(age)}")
+            y += 1
+    if not two_cols:
+        draw_col(2, items[:per_col])
+    else:
+        left = items[:per_col]
+        right = items[per_col: per_col*2]
+        draw_col(2, left)
+        draw_col(cols//2 + 1, [(c,a) for c,a in right])
+
+    # guarantee exact width
+    lines = [_pad_to(line, cols) for line in lines]
+    body = "\n".join(lines) + "\n"
+
+    # Build a change signature that groups seconds to 1s buckets
+    board_digest = hashlib.sha1((";".join(f"{c}:{a}" for c,a in items)).encode()).hexdigest()
+    sig = (cnt, board_digest, mode, banner, tleft)  # update etag elke seconde/board change
+    return body, sig
+
+def _get_screen_cached(cols=160, rows=144):
+    global _last_screen, _last_etag, _last_sig
+    body, sig = _render_screen(cols, rows)
+    if sig != _last_sig:
+        _last_sig = sig
+        _last_screen = body
+        _last_etag = hashlib.md5(body.encode()).hexdigest()
+    return _last_screen, _last_etag
+
+@app.get("/kpi/screen.txt")
+def screen_txt():
+    cols = 160; rows = 144
+    body, etag = _get_screen_cached(cols, rows)
+    inm = request.headers.get("If-None-Match")
+    if inm and inm == etag:
+        r = Response(status=304)
+        r.headers["ETag"] = etag
+        r.headers["Cache-Control"] = "no-store"
+        return r
+    r = Response(body, mimetype="text/plain; charset=utf-8")
+    r.headers["Cache-Control"] = "no-store"
+    r.headers["ETag"] = etag
+    return r
+
+@app.get("/kpi/screen")
+def screen_html():
+    html = """<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the101game — ASCII</title>
+<style>
+  html,body{margin:0;background:#000;color:#0f0}
+  pre#scr{margin:0;white-space:pre;line-height:1;letter-spacing:0;font:12px ui-monospace,monospace;padding:6px}
+</style>
+<pre id="scr"></pre>
+<script>
+  const scr = document.getElementById('scr');
+  (async function aliasFromHash(){
+    try{
+      const m=(location.hash||'').match(/[#&]a=([A-Za-z]{4})/);
+      if(!m) return;
+      const code=m[1].toUpperCase();
+      if(!/^[A-Z]{4}$/.test(code)) return;
+      const res = await fetch('/kpi/join',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)});
+      if(res.status===409){
+        const j=await res.json(); if(j.alt){ await fetch('/kpi/join',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(j.alt)}); }
+      }
+    }catch(_){}
+  })();
+  let etag=null;
+  async function tick(){
+    try{
+      const r = await fetch('/kpi/screen.txt',{cache:'no-store', headers: etag?{'If-None-Match': etag}:{}} );
+      if(r.status===304) return;
+      etag = r.headers.get('ETag');
+      scr.textContent = await r.text();
+    }catch(_){}
+  }
+  tick(); setInterval(tick, 1000);
+  window.addEventListener('pagehide', ()=>{ try{ navigator.sendBeacon('/kpi/leave','1'); }catch(_){} });
+  window.addEventListener('beforeunload', ()=>{ try{ navigator.sendBeacon('/kpi/leave','1'); }catch(_){} });
+</script>"""
+    return Response(html, mimetype="text/html; charset=utf-8")

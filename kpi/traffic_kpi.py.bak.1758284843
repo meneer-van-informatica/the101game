@@ -1,0 +1,453 @@
+from flask import Flask, request, jsonify, make_response, Response
+import time, threading, uuid, re, os, hashlib, random, string, math
+from datetime import datetime, timezone
+
+app = Flask(__name__)
+
+# ===== CONFIG =====================================================================
+TTL_SECONDS    = 90                 # failsafe presence (>= round)
+ROUND_SECONDS  = 60                 # reset iedereen elke 60s
+TOK_INTERVAL_S = 10                 # elke 10s nieuwe challenge
+TOK_WINDOW_S   = 10                 # 10s om te bevestigen
+CODE_RE = re.compile(r"^[A-Z]{4}$")
+MODES = {"stop","live","cars","view","site","null"}
+_mode = "live"
+_banner = ""                        # optionele kopregel-boodschap
+
+# State
+_sessions = {}   # sid -> dict(session)
+_lock = threading.Lock()
+_rev = 1
+_round_started = time.time()
+
+# Cached screen (ETag/304)
+_last_screen = ""
+_last_etag   = ""
+_last_sig    = None   # (count, board_digest, mode, banner, tleft, tok_digest)
+
+def _now(): return time.time()
+def _mmss(sec):
+    m, s = divmod(max(0,int(sec)), 60)
+    return f"{m:02d}:{s:02d}"
+
+def _admin_token():
+    p = "/home/lucas/the101game/kpi/admin.secret"
+    if os.path.exists(p):
+        return open(p).read().strip()
+    return os.environ.get("KPI_ADMIN_TOKEN","dev")
+
+def _get_or_create_session(sid, now=None):
+    now = now or _now()
+    s = _sessions.get(sid)
+    if not s:
+        s = {
+            "last_seen": now,
+            "joined_at": now,
+            "code": None,
+            # TOK state
+            "tok_next": now + TOK_INTERVAL_S,  # wanneer volgende challenge start
+            "tok_active": False,
+            "tok_deadline": 0.0,
+        }
+        _sessions[sid] = s
+    return s
+
+def _sweep(now=None):
+    now = now or _now()
+    dead = [sid for sid,d in list(_sessions.items()) if now - d.get("last_seen", 0) > TTL_SECONDS]
+    for sid in dead: _sessions.pop(sid, None)
+
+def _active_count(now=None):
+    now = now or _now()
+    return sum(1 for d in _sessions.values() if now - d.get("last_seen", 0) <= TTL_SECONDS)
+
+def _tleft(now=None):
+    now = now or _now()
+    return max(0, ROUND_SECONDS - int(now - _round_started))
+
+def _tok_enforce(s, now):
+    """
+    Zorgt dat TOK-challenges elke 10s starten en binnen 10s bevestigd moeten worden.
+    Retourneert (active:bool, left:int). Als deadline gemist → session wordt verwijderd.
+    """
+    # Als er nog geen code is (geen speler), stel tok_next uit tot later.
+    if not s.get("code"):
+        s["tok_active"] = False
+        s["tok_deadline"] = 0.0
+        s["tok_next"] = now + TOK_INTERVAL_S
+        return (False, 0)
+
+    # Start nieuwe challenge?
+    if not s["tok_active"] and now >= s["tok_next"]:
+        s["tok_active"] = True
+        s["tok_deadline"] = now + TOK_WINDOW_S
+
+    # Tijdens challenge: check deadline
+    if s["tok_active"]:
+        left = max(0, math.ceil(s["tok_deadline"] - now))
+        if left <= 0:
+            # timeout → logout
+            return ("KILL", 0)
+        return (True, left)
+
+    # Geen challenge actief
+    return (False, max(0, int(s["tok_next"] - now)))
+
+# ===== JANITOR (per seconde) ======================================================
+def _janitor():
+    global _round_started, _rev
+    while True:
+        time.sleep(1)
+        now = _now()
+        with _lock:
+            if _mode != "stop" and now - _round_started >= ROUND_SECONDS:
+                _sessions.clear()
+                _round_started = now
+                _rev += 1
+            else:
+                # Sweep en force timeouts
+                dels = []
+                for sid, s in _sessions.items():
+                    active, left = _tok_enforce(s, now)
+                    if active == "KILL":
+                        dels.append(sid)
+                for sid in dels:
+                    _sessions.pop(sid, None)
+                _sweep(now)
+threading.Thread(target=_janitor, daemon=True).start()
+
+# ===== API ========================================================================
+@app.route("/kpi/pulse", methods=["POST","GET"])
+def pulse():
+    sid = request.cookies.get("sid") or uuid.uuid4().hex
+    now = _now()
+    with _lock:
+        s = _get_or_create_session(sid, now)
+        s["last_seen"] = now
+        state, left = _tok_enforce(s, now)
+        if state == "KILL":
+            _sessions.pop(sid, None)
+            cnt = _active_count(now)
+            res = make_response(jsonify({"count": cnt, "kicked": True}))
+            res.set_cookie("sid", "", max_age=0)
+            res.headers["Cache-Control"] = "no-store"
+            return res
+        cnt = _active_count(now)
+        rev = _rev
+        tleft = _tleft(now)
+    res = make_response(jsonify({
+        "count": cnt, "sid": sid, "ttl": TTL_SECONDS, "rev": rev, "tleft": tleft,
+        "tok": {"active": bool(state is True), "left": int(left)}
+    }))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+@app.post("/kpi/tok")
+def tok_ack():
+    """Client bevestigt TOK (any key/touch)."""
+    sid = request.cookies.get("sid")
+    if not sid:
+        return jsonify({"ok": False, "error": "NO_SID"}), 400
+    now = _now()
+    with _lock:
+        s = _sessions.get(sid)
+        if not s:
+            return jsonify({"ok": False, "error": "NO_SESSION"}), 404
+        s["last_seen"] = now
+        # Alleen als er een challenge loopt: de-activate en plan volgende
+        if s.get("tok_active"):
+            s["tok_active"] = False
+            s["tok_deadline"] = 0.0
+            s["tok_next"] = now + TOK_INTERVAL_S
+        else:
+            # Geen challenge → schuif volgende iets op zodat spam niet continu uitstelt
+            s["tok_next"] = max(s.get("tok_next", now + TOK_INTERVAL_S), now + 2)
+        cnt = _active_count(now)
+        tstate, tleft = _tok_enforce(s, now)
+    return jsonify({"ok": True, "count": cnt, "tok": {"active": tstate is True, "left": int(tleft)}})
+
+# Alias / join / leave / board / round hetzelfde als eerder, met kleine uitbreidingen
+def _suggest_alt(code):
+    letters = string.ascii_uppercase
+    for _ in range(50):
+        i = random.randrange(4)
+        alt = list(code)
+        alt[i] = random.choice(letters.replace(alt[i], ""))
+        alt = "".join(alt)
+        if not any((d.get("code")==alt) for d in _sessions.values()):
+            return alt
+    return None
+
+@app.post("/kpi/join")
+def join():
+    code = (request.form.get("code") if request.form else None) or (request.json or {}).get("code", None)
+    if not code or not CODE_RE.match(code):
+        return jsonify({"ok": False, "error": "CODE_INVALID", "hint": "4 hoofdletters [A-Z]."}), 400
+    code = code.upper()
+    now = _now()
+    with _lock:
+        if any((d.get("code")==code) for d in _sessions.values()):
+            alt = _suggest_alt(code)
+            return jsonify({"ok": False, "error": "CODE_TAKEN", "alt": alt}), 409
+        sid = request.cookies.get("sid") or uuid.uuid4().hex
+        s = _get_or_create_session(sid, now)
+        s.update(code=code, joined_at=now, last_seen=now)
+        # Reset TOK timers bij join
+        s["tok_active"] = False
+        s["tok_deadline"] = 0.0
+        s["tok_next"] = now + TOK_INTERVAL_S
+        cnt = _active_count(now)
+        rev = _rev
+        tleft = _tleft(now)
+    res = make_response(jsonify({"ok": True, "sid": sid, "code": code, "count": cnt, "rev": rev, "tleft": tleft}))
+    res.set_cookie("sid", sid, max_age=86400, secure=True, httponly=False, samesite="Lax")
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+@app.post("/kpi/leave")
+def leave():
+    sid = request.cookies.get("sid")
+    with _lock:
+        if sid: _sessions.pop(sid, None)
+    return jsonify({"ok": True})
+
+@app.get("/kpi/board")
+def board():
+    now = _now()
+    with _lock:
+        items = []
+        for sid, d in _sessions.items():
+            if now - d.get("last_seen", 0) > TTL_SECONDS: continue
+            code = d.get("code")
+            if not code: continue
+            age = int(now - d.get("joined_at", now))
+            # TOK status per speler
+            state, left = _tok_enforce(d, now)
+            tok_left = 0
+            tok_flag = False
+            if state == "KILL":
+                continue
+            if state is True:
+                tok_flag = True
+                tok_left = int(left)
+            items.append({"code": code, "age_s": age, "tok": tok_left if tok_flag else None})
+        items.sort(key=lambda x: (-x["age_s"], x["code"]))
+        rev = _rev
+        tleft = _tleft(now)
+    return jsonify({"board": items, "count": len(items), "rev": rev, "tleft": tleft})
+
+@app.get("/kpi/round")
+def round_info():
+    with _lock:
+        return jsonify({"tleft": _tleft(), "rev": _rev, "round": ROUND_SECONDS, "mode": _mode, "banner": _banner})
+
+@app.post("/kpi/cmd")
+def cmd():
+    token = request.args.get("token") or (request.json or {}).get("token")
+    if token != _admin_token():
+        return jsonify({"ok": False, "error": "UNAUTHORIZED"}), 401
+    key = (request.args.get("key") or (request.json or {}).get("key","")).lower().strip()
+    msg = request.args.get("msg") or (request.json or {}).get("msg", None)
+    new_round = request.args.get("round") or (request.json or {}).get("round", None)
+    out = {}
+    with _lock:
+        global _mode, ROUND_SECONDS, _round_started, _rev, _banner
+        if key:
+            if key not in MODES:
+                return jsonify({"ok": False, "error": "INVALID_MODE", "modes": sorted(MODES)}), 400
+            _mode = key
+            out["mode"] = _mode
+        if msg is not None:
+            _banner = (msg or "").upper()[:80]
+            out["banner"] = _banner
+        if new_round:
+            try:
+                nr = int(new_round)
+                if 10 <= nr <= 3600:
+                    ROUND_SECONDS = nr
+                    _round_started = _now()
+                    _rev += 1
+                    out["round"] = ROUND_SECONDS
+                else:
+                    out["warn"] = "round outside [10..3600], ignored"
+            except:
+                out["warn"] = "round invalid"
+    out["ok"] = True
+    return jsonify(out)
+
+# ===== ASCII screen (160×144) + ETag ==================================================
+def _pad_to(line: str, width: int) -> str:
+    if len(line) > width: return line[:width]
+    return line + (" " * (width - len(line)))
+
+def _render_screen(cols=160, rows=144):
+    now = _now()
+    # snapshot + tok digest
+    with _lock:
+        cnt = _active_count(now)
+        tleft = _tleft(now)
+        mode = _mode
+        banner = _banner
+        items = []
+        tok_signature_parts = []
+        for sid, d in _sessions.items():
+            if now - d.get("last_seen", 0) > TTL_SECONDS: continue
+            code = d.get("code")
+            if not code: continue
+            age = int(now - d.get("joined_at", now))
+            st, left = _tok_enforce(d, now)
+            tok = None
+            if st == "KILL":
+                continue
+            if st is True:
+                tok = int(left)
+            items.append((code, age, tok))
+            tok_signature_parts.append(f"{code}:{tok if tok is not None else 'ok'}")
+        items.sort(key=lambda x: (-x[1], x[0]))
+        rev = _rev
+
+    # frame lines
+    horiz = "-" * (cols - 2)
+    lines = []
+    lines.append("+" + horiz + "+")
+    inner = " " * (cols - 2)
+    for _ in range(rows-2):
+        lines.append("|" + inner + "|")
+    lines.append("+" + horiz + "+")
+
+    def put(x, y, s):
+        if not (0 < x < cols-1 and 0 < y < rows-1): return
+        s = str(s)
+        if x + len(s) >= cols-1: s = s[:cols-1-x]
+        row = lines[y]
+        lines[y] = row[:x] + s + row[x+len(s):]
+
+    # Header: toon TOK-instructie
+    hdr = f"TRAFFIC: {cnt:05d}   ROUND T-{_mmss(tleft)}   MODE: {mode.upper()}   TOK: DRUK EEN TOETS (10s)"
+    put(2, 2, hdr if len(hdr) < cols-4 else hdr[:cols-4])
+    if banner:
+        put(cols - 2 - len(banner), 2, banner)  # rechts uitlijnen
+    put(2, 3, "ALIAS   TIME   TOK")
+
+    # Board: één of twee kolommen
+    start_y = 5
+    avail = (rows - 1) - start_y
+    def fmt_line(rank, code, age, tok):
+        tok_str = ("OK " if tok is None else f"{tok:02d}s")
+        return f"{rank:2d}. {code}   {_mmss(age)}   {tok_str}"
+
+    rows_needed = len(items)
+    two_cols = rows_needed > avail
+    if not two_cols:
+        y = start_y
+        for i, (code, age, tok) in enumerate(items[:avail], start=1):
+            put(2, y, fmt_line(i, code, age, tok)); y += 1
+    else:
+        left = items[:avail]
+        right = items[avail: avail*2]
+        y = start_y
+        for i, (code, age, tok) in enumerate(left, start=1):
+            put(2, y, fmt_line(i, code, age, tok)); y += 1
+        y = start_y
+        for i, (code, age, tok) in enumerate(right, start=1+len(left)):
+            put(cols//2 + 1, y, fmt_line(i, code, age, tok)); y += 1
+
+    # exact width
+    lines = [_pad_to(line, cols) for line in lines]
+    body = "\n".join(lines) + "\n"
+
+    # ETag signature
+    board_digest = hashlib.sha1((";".join(f"{c}:{a}" for c,a,_ in items)).encode()).hexdigest()
+    tok_digest = hashlib.md5(";".join(tok_signature_parts).encode()).hexdigest()
+    sig = (cnt, board_digest, mode, banner, tleft, tok_digest, rev)
+    return body, sig
+
+_last_screen = ""
+_last_etag = ""
+_last_sig = None
+def _get_screen_cached(cols=160, rows=144):
+    global _last_screen, _last_etag, _last_sig
+    body, sig = _render_screen(cols, rows)
+    if sig != _last_sig:
+        _last_sig = sig
+        _last_screen = body
+        _last_etag = hashlib.md5(body.encode()).hexdigest()
+    return _last_screen, _last_etag
+
+@app.get("/kpi/screen.txt")
+def screen_txt():
+    cols = 160; rows = 144
+    body, etag = _get_screen_cached(cols, rows)
+    inm = request.headers.get("If-None-Match")
+    if inm and inm == etag:
+        r = Response(status=304)
+        r.headers["ETag"] = etag
+        r.headers["Cache-Control"] = "no-store"
+        return r
+    r = Response(body, mimetype="text/plain; charset=utf-8")
+    r.headers["Cache-Control"] = "no-store"
+    r.headers["ETag"] = etag
+    return r
+
+@app.get("/kpi/screen")
+def screen_html():
+    # Eén zichtbaar element: <pre id="scr">. Key/touch bevestigt TOK via /kpi/tok.
+    html = """<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the101game — ASCII</title>
+<style>
+  html,body{margin:0;background:#000;color:#0f0}
+  pre#scr{margin:0;white-space:pre;line-height:1;letter-spacing:0;font:12px ui-monospace,monospace;padding:6px}
+</style>
+<pre id="scr"></pre>
+<script>
+  const scr = document.getElementById('scr');
+  let etag=null, tokActive=false;
+
+  // Alias via hash (#a=ABCD) — geen UI nodig
+  (async function aliasFromHash(){
+    try{
+      const m=(location.hash||'').match(/[#&]a=([A-Za-z]{4})/);
+      if(!m) return;
+      const code=m[1].toUpperCase();
+      if(!/^[A-Z]{4}$/.test(code)) return;
+      const r=await fetch('/kpi/join',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)});
+      if(r.status===409){ const j=await r.json(); if(j.alt){ await fetch('/kpi/join',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(j.alt)}); } }
+    }catch(_){}
+  })();
+
+  async function tickScreen(){
+    try{
+      const r = await fetch('/kpi/screen.txt',{cache:'no-store', headers: etag?{'If-None-Match': etag}:{}} );
+      if(r.status!==304){
+        etag = r.headers.get('ETag');
+        const t = await r.text();
+        scr.textContent = t;
+      }
+    }catch(_){}
+  }
+
+  async function tickPulse(){
+    try{
+      const r = await fetch('/kpi/pulse',{method:'POST',headers:{'Accept':'application/json'}});
+      if(!r.ok) return;
+      const j = await r.json();
+      tokActive = !!(j && j.tok && j.tok.active);
+      // optioneel: flits in title bij actieve TOK
+      if(tokActive){ document.title='TOK ▮ the101game — ASCII'; } else { document.title='the101game — ASCII'; }
+    }catch(_){}
+  }
+
+  async function ackTok(){ try{ await fetch('/kpi/tok',{method:'POST'}); }catch(_){ } }
+  window.addEventListener('keydown', ()=>{ if(tokActive) ackTok(); });
+  window.addEventListener('mousedown', ()=>{ if(tokActive) ackTok(); });
+  window.addEventListener('touchstart', ()=>{ if(tokActive) ackTok(); }, {passive:true});
+
+  tickScreen(); setInterval(tickScreen, 1000);
+  tickPulse();  setInterval(tickPulse, 1000);
+
+  window.addEventListener('pagehide', ()=>{ try{ navigator.sendBeacon('/kpi/leave','1'); }catch(_){} });
+  window.addEventListener('beforeunload', ()=>{ try{ navigator.sendBeacon('/kpi/leave','1'); }catch(_){} });
+</script>"""
+    return Response(html, mimetype="text/html; charset=utf-8")

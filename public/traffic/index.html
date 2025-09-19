@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8">
+<title>the101game — Traffic KPI</title>
+<meta http-equiv="refresh" content="10">
+<style>
+ body{font:14px ui-sans-serif,system-ui;max-width:720px;margin:24px auto;padding:0 16px}
+ h1{margin:0 0 8px}.muted{color:#666}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+ .card{border:1px solid #eee;border-radius:12px;padding:12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+ .big{font-size:28px;font-weight:700} table{width:100%;border-collapse:collapse;margin-top:8px}
+ th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;font-variant-numeric:tabular-nums}
+ code{font-family:ui-monospace,monospace}
+</style>
+<h1>the101game — Traffic KPI</h1>
+<div class="muted">Bron: /t/ingest — auto-refresh 10s</div>
+<div id="stats" class="kpis"></div>
+<div class="card">
+  <div style="font-weight:600">Top Paths (venster)</div>
+  <table><thead><tr><th>Hits</th><th>Path</th></tr></thead><tbody id="paths"></tbody></table>
+</div>
+<script>
+async function load(){
+  const resp = await fetch('/traffic_kpi.txt', {cache:'no-store'}).catch(()=>null);
+  if(!resp){ document.getElementById('stats').innerHTML='<div class="card">Geen data…</div>'; return; }
+  const txt = await resp.text();
+  const rows = txt.trim().split(/\n/).map(l=>l.split(/\t/));
+  const map = Object.fromEntries(rows.filter(r=>r.length===2));
+  const kpis = [['Requests',map['requests']||'0'],['Unieke IPs',map['unique_ips']||'0'],['Window (regels)',map['window_last_lines']||'0'],['2xx',map['2xx']||'0'],['3xx',map['3xx']||'0'],['4xx',map['4xx']||'0']];
+  document.getElementById('stats').innerHTML = kpis.map(([k,v])=>'<div class="card"><div class="big">'+v+'</div><div class="muted">'+k+'</div></div>').join('');
+  const body = document.getElementById('paths'); body.innerHTML='';
+  const start = rows.findIndex(r=>r[0]==='top_paths_count');
+  if(start>=0){ for(let i=start+1;i<rows.length;i++){ const r=rows[i]; if(!r[1]) continue; const tr=document.createElement('tr'); tr.innerHTML='<td>'+r[0]+'</td><td><code>'+r[1]+'</code></td>'; body.appendChild(tr);} }
+}
+load(); setInterval(load, 10000);
+</script>
